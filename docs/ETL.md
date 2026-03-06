@@ -157,31 +157,10 @@ Key items used by the model: `ifrs-full_ProfitLoss` (net income), `ifrs-full_Gro
 
 ---
 
-## Pipeline 1: Prices + Stock Master (`clean_etl.py`)
+## Pipeline 1: Prices + Stock Master (`price_etl.py`)
 
 **Source**: KRX market data API
 **Tables updated**: `stocks`, `daily_prices`, `stock_history`
-
-### Daily update (run each trading day)
-
-```bash
-python3 etl/clean_etl.py \
-  --daily-update --date 20260214 \
-  --markets kospi,kosdaq --db-path krx_stock_data.db
-```
-
-### Historical backfill
-
-```bash
-python3 etl/clean_etl.py \
-  --backfill --start-date 20100101 --end-date 20251231 \
-  --markets kospi,kosdaq --db-path krx_stock_data.db
-```
-
-**Notes**:
-- `--markets` accepts `kospi`, `kosdaq`, `kodex` (comma-separated)
-- If a progress file exists from a previous run, it may prompt to resume
-- Use `--force` to reprocess dates that already have data
 
 ---
 
@@ -240,17 +219,6 @@ python3 etl/financial_etl.py krx_stock_data.db data/raw_financial
 - Only consolidated (`연결`) statements are used by the model
 - The `available_date` field enforces PIT safety -- the model never uses financial data before it would have been publicly available
 
----
-
-## Recommended Run Order
-
-```
-1. clean_etl.py          (prices must exist first)
-2. index_constituents_etl.py
-3. delisted_stocks_etl.py
-4. financial_etl.py
-```
-
 ## Validation After ETL
 
 ```bash
@@ -272,4 +240,4 @@ sqlite3 krx_stock_data.db "SELECT MAX(date) FROM index_constituents;"
 | Selenium/Chrome errors in constituents ETL | Install/update Chrome and matching ChromeDriver |
 | Financial ETL loads 0 rows | Check that ZIP files exist in `data/raw_financial/` |
 | Very slow backfill | Use `--workers 4` for constituents; split date ranges for prices |
-| `market_type` column missing | Run `clean_etl.py` first -- it creates the `daily_prices` table with all columns |
+| `market_type` column missing | Run `price_etl.py` first -- it creates the `daily_prices` table with all columns |

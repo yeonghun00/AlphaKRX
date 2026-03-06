@@ -499,13 +499,12 @@ Examples
 
     # ── 2. DB 최신화 ─────────────────────────────────────────────────────
     if not args.no_update:
-        print("\n[1/4] DB 업데이트 (update-all)...")
+        print("\n[1/4] DB 업데이트...")
         import subprocess
-        result = subprocess.run(
-            [sys.executable, "scripts/algostock_cli.py", "update-all"],
-            check=False,
-        )
-        if result.returncode != 0:
+        r1 = subprocess.run([sys.executable, "scripts/run_etl.py", "update"], check=False)
+        r2 = subprocess.run([sys.executable, "scripts/run_index_etl.py", "--daily-update"], check=False)
+        r3 = subprocess.run([sys.executable, "etl/adj_price_etl.py"], check=False)
+        if any(r.returncode != 0 for r in [r1, r2, r3]):
             print("  WARNING: update-all 일부 실패. 계속 진행합니다.")
     else:
         print("\n[1/4] DB 업데이트 건너뜀 (--no-update)")

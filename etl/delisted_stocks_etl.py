@@ -169,7 +169,7 @@ def download_delisted_stocks():
         'forward': 'delcompany_down',
         'searchType': 'marketType',
         'searchCorpNameTmp': '',
-        'fromDate': '1999-01-01',  # Start date as requested
+        'fromDate': '1999-01-01',  # Start date 
         'toDate': datetime.now().strftime('%Y-%m-%d')  # Today's date
     }
     

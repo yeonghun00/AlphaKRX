@@ -34,7 +34,7 @@ runs/<name>/       Kiwoom REST API
 algostock/
 ├── etl/                          # Data ingestion
 │   ├── krx_api.py                # KRX API client
-│   ├── clean_etl.py              # Prices + stock master
+│   ├── price_etl.py              # Prices + stock master
 │   ├── index_constituents_etl.py # Index membership snapshots
 │   ├── delisted_stocks_etl.py    # Delisted stock list
 │   ├── adj_price_etl.py          # Adjusted price chain
@@ -64,7 +64,6 @@ algostock/
 │   ├── get_picks.py              # Today's picks from saved model
 │   ├── run_live.py               # Rebalance schedule + Kiwoom orders
 │   ├── run_etl.py                # Unified ETL runner
-│   ├── algostock_cli.py          # CLI interface
 │   ├── dashboard.py              # HTML dashboard
 │   ├── auto_live.sh              # Daily cron/launchd wrapper
 │   └── setup_scheduler.sh        # Scheduler install/remove
@@ -94,12 +93,6 @@ algostock/
 
 ```bash
 python3 scripts/run_etl.py update --markets kospi,kosdaq --workers 4
-```
-
-Or via CLI:
-
-```bash
-python3 scripts/algostock_cli.py update-all
 ```
 
 For full historical backfill:

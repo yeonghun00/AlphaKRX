@@ -420,7 +420,7 @@ def validate(conn: sqlite3.Connection) -> bool:
 # ---------------------------------------------------------------------------
 
 class AdjPriceETL:
-    """Thin wrapper so algostock_cli.py can import and call .run()."""
+    """Thin wrapper that can be imported and called as .run()."""
 
     def __init__(self, db_path: str = str(DEFAULT_DB)):
         self.db_path = db_path

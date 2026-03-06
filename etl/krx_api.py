@@ -13,7 +13,7 @@ import json
 import threading
 
 class KRXAPI:
-    """Handles KRX API requests for multiple markets (KOSPI, KOSDAQ, KODEX)."""
+    """Handles KRX API requests for multiple markets (KOSPI, KOSDAQ, KONEX)."""
 
     # Default configuration values
     DEFAULT_CONFIG = {

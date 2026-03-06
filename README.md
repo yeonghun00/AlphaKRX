@@ -18,12 +18,6 @@ Korean equity quantitative trading system — KRX data pipeline, LightGBM rankin
 python3 scripts/run_etl.py update --markets kospi,kosdaq --workers 4
 ```
 
-Or via the unified CLI:
-
-```bash
-python3 scripts/algostock_cli.py update-all
-```
-
 ### 2. Run a backtest
 
 ```bash
@@ -53,9 +47,9 @@ python3 scripts/run_live.py --run myrun
 ```
 
 Shows one of:
-- `⏳ N 거래일 후 실행일` — not yet, nothing to do
-- `📅 내일이 실행일` — tomorrow, previews picks
-- `✅ 오늘이 실행일` — today, shows buy/sell orders
+- `⏳ N trading days until execution` — not yet, nothing to do
+- `📅 Tomorrow is execution day` — tomorrow, previews picks
+- `✅ Today is execution day` — today, shows buy/sell orders
 
 ### 5. Live rebalancing — execute orders
 
@@ -145,7 +139,7 @@ Cross-checks picks against Naver Finance adjusted prices. See `verification/READ
 algostock/
 ├── etl/                          # Data ingestion pipelines
 │   ├── krx_api.py                # KRX API client (rate-limited, parallel)
-│   ├── clean_etl.py              # Prices + stock master
+│   ├── price_etl.py              # Prices + stock master
 │   ├── index_constituents_etl.py # Index membership snapshots
 │   ├── delisted_stocks_etl.py    # Delisted stock list
 │   ├── adj_price_etl.py          # Adjusted price chain builder
@@ -175,7 +169,6 @@ algostock/
 │   ├── get_picks.py              # Generate picks from trained model
 │   ├── run_live.py               # Live rebalancing + Kiwoom orders
 │   ├── run_etl.py                # Unified ETL runner
-│   ├── algostock_cli.py          # CLI (etl status/update/backfill)
 │   ├── dashboard.py              # HTML dashboard generator
 │   ├── auto_live.sh              # Daily automation wrapper
 │   └── setup_scheduler.sh        # Install/remove launchd scheduler

@@ -34,7 +34,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "etl"))
 
 from config import load_config
-from etl.clean_etl import CleanETLPipeline
+from etl.price_etl import CleanETLPipeline
 from etl.krx_api import KRXAPI
 from etl.index_constituents_etl import KRXIndexConstituentsDirect
 from etl.delisted_stocks_etl import (
