@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-KRX Index Constituents Extractor
+[UTILITY] KRX Index Constituents Extractor
 
-This script extracts stock codes from KRX index CSV files and inserts them directly
-into the database for industry analysis and computation.
+Extracts stock codes from locally saved KRX index CSV files (data/krx_indices/)
+and inserts them into the database. Requires CSV files to already be downloaded
+(use fetch_all_krx_indices.py or fetch_krx_indices.py first).
+
+The main pipeline (etl/index_constituents_etl.py) handles fetching + inserting in one step.
 
 Features:
 1. Backfill mode: Process historical data from 2010-01-01 to present
@@ -31,7 +34,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import load_config
-from scripts.fetch_krx_indices import KRXIndexScraper
+from tools.fetch_krx_indices import KRXIndexScraper
 
 
 class IndexConstituentsExtractor:
@@ -43,7 +46,7 @@ class IndexConstituentsExtractor:
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_full_path = os.path.join(project_root, config_path)
         self.config = load_config(config_full_path)
-        self.db_path = self.config.get('database', {}).get('path', 'krx_stock_data.db')
+        self.db_path = self.config.get('database', {}).get('path', 'data/krx_stock_data.db')
         
         # Create database table if it doesn't exist
         self._create_table()

@@ -60,6 +60,7 @@ Pre-split adj_close should be ≈ 1/50 of raw_close (ratio ≈ 0.02).
 from __future__ import annotations
 
 import argparse
+import logging
 import sqlite3
 import subprocess
 import sys
@@ -70,11 +71,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-DEFAULT_DB = Path(__file__).parent.parent / "krx_stock_data.db"
+DEFAULT_DB = Path(__file__).parent.parent / "data" / "krx_stock_data.db"
 WRITE_BATCH = 500_000   # rows per executemany call
 
 _COLS = [
@@ -224,10 +227,8 @@ def _load_prices(db_path: str) -> pd.DataFrame:
         df = _load_via_subprocess(db_path)
         method = "subprocess"
     except (FileNotFoundError, subprocess.SubprocessError) as exc:
-        print(
-            f"\n[adj_etl] sqlite3 CLI unavailable ({exc}); "
-            "falling back to pd.read_sql_query (slower) …",
-            flush=True,
+        logger.warning(
+            "[adj_etl] sqlite3 CLI unavailable (%s); falling back to pd.read_sql_query (slower)", exc
         )
         df = _load_via_pandas(db_path)
         method = "pandas"
@@ -290,23 +291,36 @@ def compute_adj_prices(df: pd.DataFrame) -> pd.DataFrame:
         .transform("last")              # "last" = latest date in ascending group
         .astype(np.float64)
     )
-    df["adj_closing_price"] = (latest_close * df["adj_factor"]).round(4)
+    # Keep unrounded for ratio computation; round only at the final output step.
+    adj_close_exact = latest_close * df["adj_factor"]
+    df["adj_closing_price"] = adj_close_exact.round(4)
 
     # 5. Common scaling ratio for O/H/L.
+    #    Use the unrounded adj_close to avoid propagating rounding errors into O/H/L.
+    #    Guard closing_price=0 (full trading halt) with NaN to prevent division by zero.
     raw_close_safe = df["closing_price"].replace(0, np.nan).astype(np.float64)
-    ratio = df["adj_closing_price"] / raw_close_safe
+    ratio = adj_close_exact / raw_close_safe
 
     # 6. Adjusted open / high / low.
-    #    Preserve 0 as 0: opening_price=0 marks circuit-breaker / upper-lock days.
+    #    Two zero cases to handle:
+    #      a) raw O/H/L = 0  → circuit-breaker / price-locked day, preserve 0.
+    #      b) closing_price = 0 (ratio = NaN) but raw O/H/L ≠ 0 → full trading halt;
+    #         ratio is undefined, so fall back to raw value (no split on that day).
     for raw_col, adj_col in [
         ("opening_price", "adj_opening_price"),
         ("high_price",    "adj_high_price"),
         ("low_price",     "adj_low_price"),
     ]:
+        raw = df[raw_col].astype(np.float64)
+        scaled = (raw * ratio).round(4)
         df[adj_col] = np.where(
-            df[raw_col] == 0,
+            raw == 0,           # case a: price-locked, keep 0
             0.0,
-            (df[raw_col].astype(np.float64) * ratio).round(4),
+            np.where(
+                raw_close_safe.isna(),  # case b: closing halt, ratio undefined
+                raw.round(4),
+                scaled,
+            ),
         )
 
     print(f"done in {time.time()-t0:.1f}s", flush=True)
@@ -329,8 +343,27 @@ def _write(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
         "adj_closing_price", "adj_opening_price",
         "adj_high_price", "adj_low_price",
     ]
+
+    # Write into a staging table first, then atomically rename.
+    # This ensures adj_daily_prices is never in a partially-updated state
+    # if the process crashes mid-write.
+    conn.execute("DROP TABLE IF EXISTS adj_daily_prices_staging")
+    conn.execute("""
+        CREATE TABLE adj_daily_prices_staging (
+            stock_code          TEXT NOT NULL,
+            date                TEXT NOT NULL,
+            adj_factor          REAL,
+            adj_closing_price   REAL,
+            adj_opening_price   REAL,
+            adj_high_price      REAL,
+            adj_low_price       REAL,
+            PRIMARY KEY (stock_code, date)
+        )
+    """)
+    conn.commit()
+
     SQL = (
-        "INSERT OR REPLACE INTO adj_daily_prices "
+        "INSERT INTO adj_daily_prices_staging "
         "(stock_code, date, adj_factor, "
         "adj_closing_price, adj_opening_price, adj_high_price, adj_low_price) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -357,6 +390,15 @@ def _write(conn: sqlite3.Connection, df: pd.DataFrame) -> None:
             end="",
             flush=True,
         )
+
+    # Atomic swap: rename staging → live table.
+    conn.execute("DROP TABLE IF EXISTS adj_daily_prices")
+    conn.execute("ALTER TABLE adj_daily_prices_staging RENAME TO adj_daily_prices")
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_adj_daily_stock_date
+            ON adj_daily_prices (stock_code, date)
+    """)
+    conn.commit()
 
     print(
         f"\n[adj_etl] Write done: {written:,} rows in {time.time()-t0:.1f}s",
@@ -391,7 +433,7 @@ def validate(conn: sqlite3.Connection) -> bool:
     )
 
     if df.empty:
-        print("[validate] ✗  No Samsung data for 20180430 ~ 20180510.", flush=True)
+        logger.error("[validate] No Samsung data for 20180430 ~ 20180510.")
         return False
 
     print("\n[validate] Samsung (005930) around 20180504 50:1 split:")
@@ -399,7 +441,7 @@ def validate(conn: sqlite3.Connection) -> bool:
 
     pre = df[df["date"] < "20180504"]
     if pre.empty:
-        print("[validate] ✗  No pre-split rows.", flush=True)
+        logger.error("[validate] No pre-split rows found for Samsung split check.")
         return False
 
     ratio = float(pre.iloc[-1]["adj_closing_price"]) / float(pre.iloc[-1]["raw_close"])

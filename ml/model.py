@@ -1,7 +1,13 @@
-"""Backward-compatible re-exports from ml.models.
+"""
+Compatibility shim — do not add logic here.
 
-Existing callers (run_backtest.py, get_picks.py) import from here:
+This file exists only so that legacy import paths still work:
     from ml.model import MLRanker, walk_forward_split
+
+The actual implementations live in:
+    ml/models/lgbm.py   ← LGBMRanker (= MLRanker)
+    ml/models/base.py   ← BaseRanker
+    ml/models/__init__.py
 """
 
 from __future__ import annotations

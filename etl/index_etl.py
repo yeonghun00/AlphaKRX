@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class IndexETLPipeline:
     """ETL pipeline for market index data with direct normalization."""
 
-    def __init__(self, db_path: str = "krx_stock_data.db"):
+    def __init__(self, db_path: str = "data/krx_stock_data.db"):
         self.db_path = db_path
         self.logger = logging.getLogger(__name__)
         self._conn = None

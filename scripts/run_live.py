@@ -4,22 +4,22 @@ Live trading runner — checks rebalancing schedule and submits orders via Kiwoo
 
 Usage
 -----
-  # 오늘 리밸런싱 필요한지 확인만
+  # Check if rebalancing is needed today (dry-run)
   python3 scripts/run_live.py --run myrun
 
-  # 확인 + 주문까지 (모의투자)
+  # Check + submit orders (paper trading)
   python3 scripts/run_live.py --run myrun --execute
 
-  # 여러 run 중 선택
+  # Interactively select a run
   python3 scripts/run_live.py
 
 Setup
 -----
-  환경변수로 API 키 설정 (또는 .env 파일):
+  Set API credentials via environment variables (or .env file):
     KIWOOM_APP_KEY=...
     KIWOOM_APP_SECRET=...
-    KIWOOM_ACCOUNT=12345678-01   # 계좌번호
-    KIWOOM_MOCK=true             # 모의투자 여부
+    KIWOOM_ACCOUNT=12345678-01   # account number
+    KIWOOM_MOCK=true             # true = paper trading, false = live
 """
 
 from __future__ import annotations
@@ -28,7 +28,6 @@ import argparse
 import os
 import re
 import sys
-import types
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -71,8 +70,12 @@ def _trading_days_between(start: str, end: str) -> list[str]:
         return [d.strftime("%Y%m%d") for d in dates]
     s = pd.Timestamp(start)
     e = pd.Timestamp(end)
-    sessions = cal.sessions_in_range(s, e)
-    return [d.strftime("%Y%m%d") for d in sessions]
+    try:
+        sessions = cal.sessions_in_range(s, e)
+        return [d.strftime("%Y%m%d") for d in sessions]
+    except Exception:
+        dates = pd.bdate_range(s, e)
+        return [d.strftime("%Y%m%d") for d in dates]
 
 
 def _add_trading_days(date_str: str, n: int) -> str:
@@ -82,8 +85,20 @@ def _add_trading_days(date_str: str, n: int) -> str:
     if cal is None:
         result = ts + pd.offsets.BDay(n)
         return result.strftime("%Y%m%d")
-    result = cal.session_offset(ts, n)
-    return result.strftime("%Y%m%d")
+    # Wrap all calendar calls: is_session/session_offset can throw DateOutOfBounds
+    # if ts is outside the calendar's supported range, or NotSessionError if ts
+    # is not a trading day. Fall back to business days in either case.
+    try:
+        if not cal.is_session(ts):
+            future = cal.sessions_in_range(ts, ts + pd.Timedelta(days=14))
+            if future.empty:
+                raise ValueError("no sessions found in range")
+            ts = future[0]
+        result = cal.session_offset(ts, n)
+        return result.strftime("%Y%m%d")
+    except Exception:
+        result = ts + pd.offsets.BDay(n)
+        return result.strftime("%Y%m%d")
 
 
 def _tomorrow_str() -> str:
@@ -230,8 +245,8 @@ def load_state() -> dict:
     LIVE_DIR.mkdir(parents=True, exist_ok=True)
     if not STATE_FILE.exists():
         return {
-            "last_executed_rebal": None,   # 마지막으로 실행한 리밸런싱 신호일
-            "current_holdings": [],        # 현재 실제 보유 종목 코드 목록
+            "last_executed_rebal": None,   # signal date of the last executed rebalancing
+            "current_holdings": [],        # list of stock codes currently held
             "run_name": None,
         }
     import json
@@ -256,7 +271,7 @@ def save_order_log(exec_date: str, sell_orders: list, buy_orders: list, new_hold
     order_path = LIVE_DIR / "orders" / f"{exec_date}.json"
     order_path.parent.mkdir(parents=True, exist_ok=True)
     order_path.write_text(json.dumps(log, ensure_ascii=False, indent=2))
-    print(f"  주문 내역 저장 → {order_path}")
+    print(f"  Order log saved → {order_path}")
 
 # ---------------------------------------------------------------------------
 # Kiwoom REST API client
@@ -264,18 +279,18 @@ def save_order_log(exec_date: str, sell_orders: list, buy_orders: list, new_hold
 
 class KiwoomClient:
     """
-    Thin wrapper around Kiwoom REST API (모의투자 / 실거래).
+    Thin wrapper around the Kiwoom REST API (paper trading / live trading).
 
-    공식 문서: https://apiportal.kiwoom.com
-    환경변수:
-        KIWOOM_APP_KEY     : 앱 키
-        KIWOOM_APP_SECRET  : 앱 시크릿
-        KIWOOM_ACCOUNT     : 계좌번호 (e.g. "12345678-01")
-        KIWOOM_MOCK        : "true" → 모의투자, "false" → 실거래 (기본: true)
+    Official docs: https://apiportal.kiwoom.com
+    Environment variables:
+        KIWOOM_APP_KEY     : app key
+        KIWOOM_APP_SECRET  : app secret
+        KIWOOM_ACCOUNT     : account number (e.g. "12345678-01")
+        KIWOOM_MOCK        : "true" → paper trading, "false" → live trading (default: true)
     """
 
-    MOCK_BASE = "https://mockapi.kiwoom.com"   # 모의투자 엔드포인트
-    REAL_BASE = "https://openapi.kiwoom.com"   # 실거래 엔드포인트
+    MOCK_BASE = "https://mockapi.kiwoom.com"   # paper trading endpoint
+    REAL_BASE = "https://openapi.kiwoom.com"   # live trading endpoint
 
     def __init__(self):
         self.app_key    = os.environ.get("KIWOOM_APP_KEY", "")
@@ -288,7 +303,7 @@ class KiwoomClient:
     def _check_credentials(self) -> bool:
         if not self.app_key or not self.app_secret or not self.account:
             print(
-                "\n[Kiwoom] 환경변수가 설정되지 않았습니다.\n"
+                "\n[Kiwoom] API credentials not set.\n"
                 "  export KIWOOM_APP_KEY=...\n"
                 "  export KIWOOM_APP_SECRET=...\n"
                 "  export KIWOOM_ACCOUNT=12345678-01\n"
@@ -298,7 +313,7 @@ class KiwoomClient:
         return True
 
     def authenticate(self) -> bool:
-        """OAuth2 token 발급."""
+        """Obtain an OAuth2 access token."""
         if not self._check_credentials():
             return False
         try:
@@ -315,10 +330,10 @@ class KiwoomClient:
             )
             resp.raise_for_status()
             self._token = resp.json().get("access_token", "")
-            print(f"[Kiwoom] 인증 성공 ({'모의투자' if self.mock else '실거래'})")
+            print(f"[Kiwoom] Authenticated ({'paper' if self.mock else 'live'})")
             return True
         except Exception as e:
-            print(f"[Kiwoom] 인증 실패: {e}")
+            print(f"[Kiwoom] Authentication failed: {e}")
             return False
 
     def _headers(self) -> dict:
@@ -330,7 +345,7 @@ class KiwoomClient:
         }
 
     def get_holdings(self) -> pd.DataFrame:
-        """현재 보유 종목 조회."""
+        """Fetch current portfolio holdings from the account."""
         try:
             import requests
             resp = requests.get(
@@ -341,19 +356,19 @@ class KiwoomClient:
             )
             resp.raise_for_status()
             data = resp.json()
-            # 응답 구조는 Kiwoom 문서 기준으로 파싱 — 필요시 조정
+            # Parse according to Kiwoom API docs — adjust field names if needed
             holdings = data.get("output", [])
             return pd.DataFrame(holdings)
         except Exception as e:
-            print(f"[Kiwoom] 보유종목 조회 실패: {e}")
+            print(f"[Kiwoom] Failed to fetch holdings: {e}")
             return pd.DataFrame()
 
     def order_sell(self, stock_code: str, quantity: int, price: int = 0) -> bool:
-        """매도 주문 (price=0 → 시장가)."""
+        """Place a sell order (price=0 → market order)."""
         return self._order(stock_code, quantity, price, side="sell")
 
     def order_buy(self, stock_code: str, quantity: int, price: int = 0) -> bool:
-        """매수 주문 (price=0 → 시장가)."""
+        """Place a buy order (price=0 → market order)."""
         return self._order(stock_code, quantity, price, side="buy")
 
     def _order(self, stock_code: str, quantity: int, price: int, side: str) -> bool:
@@ -362,10 +377,10 @@ class KiwoomClient:
             payload = {
                 "account":    self.account,
                 "stock_code": stock_code,
-                "order_type": "01" if side == "buy" else "02",   # 01=매수, 02=매도
+                "order_type": "01" if side == "buy" else "02",   # 01=buy, 02=sell
                 "quantity":   quantity,
-                "price":      price,        # 0=시장가
-                "price_type": "01" if price == 0 else "00",      # 00=지정가, 01=시장가
+                "price":      price,        # 0 = market order
+                "price_type": "01" if price == 0 else "00",      # 00=limit, 01=market
             }
             resp = requests.post(
                 f"{self.base_url}/v1/order/stock",
@@ -376,10 +391,10 @@ class KiwoomClient:
             resp.raise_for_status()
             result = resp.json()
             order_no = result.get("order_no", "?")
-            print(f"  [주문완료] {side.upper()} {stock_code} x{quantity}  주문번호={order_no}")
+            print(f"  [ORDER OK] {side.upper()} {stock_code} x{quantity}  order_no={order_no}")
             return True
         except Exception as e:
-            print(f"  [주문실패] {side.upper()} {stock_code}: {e}")
+            print(f"  [ORDER FAILED] {side.upper()} {stock_code}: {e}")
             return False
 
 # ---------------------------------------------------------------------------
@@ -410,19 +425,19 @@ def build_orders(
             "stock_code": code,
             "name":       new_picks[new_picks["stock_code"] == code]["name"].values[0]
                           if code in new_picks["stock_code"].values else code,
-            "quantity":   0,    # 전량매도: 실제 보유수량은 API 잔고 조회로 채워야 함
-            "price":      0,    # 시장가
+            "quantity":   0,    # full exit: actual quantity is filled from API balance query
+            "price":      0,    # market order
         })
 
     buy_orders = []
     for _, row in new_picks[new_picks["stock_code"].isin(buy_codes)].iterrows():
-        price = int(row.get("closing_price", row.get("매수가", 0)))
+        price = int(row.get("closing_price", row.get("buy_price", 0)))
         qty   = per_stock_krw // max(price, 1) if price > 0 else 0
         buy_orders.append({
             "stock_code": str(row["stock_code"]),
             "name":       str(row.get("name", "")),
             "quantity":   qty,
-            "price":      0,    # 시장가
+            "price":      0,    # market order
         })
 
     return sell_orders, buy_orders
@@ -442,23 +457,23 @@ def print_order_summary(
     print("\n" + "=" * 60)
     print("  REBALANCING PLAN")
     print("=" * 60)
-    print(f"  다음 리밸런싱 신호일: {schedule['next_rebal']}")
-    print(f"  실행일 (T+1):        {schedule['next_exec']}")
-    print(f"  현재 보유 종목:      {len(current_holdings)}개")
-    print(f"  신규 포트폴리오:     {top_n}개")
+    print(f"  Next signal date : {schedule['next_rebal']}")
+    print(f"  Execution date   : {schedule['next_exec']}  (T+1)")
+    print(f"  Current holdings : {len(current_holdings)} stocks")
+    print(f"  New portfolio    : {top_n} stocks")
 
     if hold_codes:
-        print(f"\n  📌 유지 종목 ({len(hold_codes)}개): {', '.join(sorted(hold_codes))}")
+        print(f"\n  [HOLD] {len(hold_codes)} unchanged: {', '.join(sorted(hold_codes))}")
 
     if sell_orders:
-        print(f"\n  🔴 매도 ({len(sell_orders)}개):")
+        print(f"\n  [SELL] {len(sell_orders)} stocks:")
         for o in sell_orders:
             print(f"     {o['stock_code']}  {o['name']}")
 
     if buy_orders:
-        print(f"\n  🟢 매수 ({len(buy_orders)}개):")
+        print(f"\n  [BUY]  {len(buy_orders)} stocks:")
         for o in buy_orders:
-            print(f"     {o['stock_code']}  {o['name']}  수량={o['quantity']}주  시장가")
+            print(f"     {o['stock_code']}  {o['name']}  qty={o['quantity']}  market")
 
     print("=" * 60)
 
@@ -473,89 +488,88 @@ def main() -> None:
         epilog="""
 Examples
 --------
-  python3 scripts/run_live.py                        # run 선택 후 스케줄 확인
-  python3 scripts/run_live.py --run myrun            # 특정 run 스케줄 확인
-  python3 scripts/run_live.py --run myrun --execute  # 주문 실행까지
+  python3 scripts/run_live.py                        # interactively select run and check schedule
+  python3 scripts/run_live.py --run myrun            # check schedule for a specific run
+  python3 scripts/run_live.py --run myrun --execute  # check schedule and submit orders
         """,
     )
     parser.add_argument("--run",       type=str, default="",
-                        help="Run name (runs/ 하위 폴더명). 없으면 목록에서 선택")
+                        help="Run name (subfolder under runs/). Prompts interactively if omitted.")
     parser.add_argument("--execute",   action="store_true",
-                        help="실제로 주문 제출 (기본: dry-run만)")
+                        help="Submit orders (default: dry-run only)")
     parser.add_argument("--top",       type=int, default=0,
-                        help="포트폴리오 종목 수 (0=model.pkl에서 자동)")
+                        help="Number of portfolio stocks (0 = read from model.pkl)")
     parser.add_argument("--portfolio", type=int, default=100_000_000,
-                        help="총 투자금액 KRW (기본: 1억)")
+                        help="Total portfolio value in KRW (default: 100,000,000)")
     parser.add_argument("--no-update", action="store_true",
-                        help="update-all 건너뜀")
+                        help="Skip DB update step")
     parser.add_argument("--force", action="store_true",
-                        help="이미 실행된 리밸런싱도 강제 재실행")
+                        help="Force re-run even if rebalancing was already executed")
     args = parser.parse_args()
 
-    # ── 1. Run 선택 ──────────────────────────────────────────────────────
+    # ── 1. Select run ────────────────────────────────────────────────────
     run_name = pick_run(args.run)
     run_dir  = RUNS_DIR / run_name
     print(f"\n[Run] {run_name}")
 
-    # ── 2. DB 최신화 ─────────────────────────────────────────────────────
+    # ── 2. Update DB ──────────────────────────────────────────────────────
     if not args.no_update:
-        print("\n[1/4] DB 업데이트...")
+        print("\n[1/4] Updating DB...")
         import subprocess
         r1 = subprocess.run([sys.executable, "scripts/run_etl.py", "update"], check=False)
         r2 = subprocess.run([sys.executable, "scripts/run_index_etl.py", "--daily-update"], check=False)
         r3 = subprocess.run([sys.executable, "etl/adj_price_etl.py"], check=False)
         if any(r.returncode != 0 for r in [r1, r2, r3]):
-            print("  WARNING: update-all 일부 실패. 계속 진행합니다.")
+            print("  WARNING: one or more update steps failed. Continuing anyway.")
     else:
-        print("\n[1/4] DB 업데이트 건너뜀 (--no-update)")
+        print("\n[1/4] Skipping DB update (--no-update)")
 
-    # ── 3. 리밸런싱 스케줄 확인 ─────────────────────────────────────────
-    print("\n[2/4] 리밸런싱 스케줄 확인...")
+    # ── 3. Check rebalancing schedule ────────────────────────────────────
+    print("\n[2/4] Checking rebalancing schedule...")
     schedule = compute_next_rebal(run_dir)
     horizon  = schedule["horizon"]
 
-    # 이미 실행된 리밸런싱인지 확인
     state = load_state()
     already_done = (state.get("last_executed_rebal") == schedule["next_rebal"])
 
-    print(f"  마지막 백테스트 리밸런싱: {schedule['last_rebal']}")
-    print(f"  Horizon:                 {horizon} 거래일")
+    print(f"  Last backtest rebalancing : {schedule['last_rebal']}")
+    print(f"  Horizon                   : {horizon} trading days")
 
-    # 놓친 리밸런싱 경고
+    # Warn about missed rebalancings
     skipped = schedule.get("skipped_rebals", [])
     if skipped:
-        print(f"\n  ⚠️  놓친 리밸런싱 {len(skipped)}회 (이미 지남):")
+        print(f"\n  WARNING: {len(skipped)} missed rebalancing(s) (already passed):")
         for s in skipped:
-            print(f"     신호일 {s['signal']} → 실행일 {s['exec']}  ← 지나갔음 (미실행)")
-        print(f"  → 처음 시작이라면 정상입니다. 다음 리밸런싱부터 실행하세요.")
+            print(f"     signal {s['signal']} → exec {s['exec']}  (not executed)")
+        print(f"  → Normal on first run. Start executing from the next rebalancing.")
 
-    print(f"\n  다음 리밸런싱 신호일: {schedule['next_rebal']}")
-    print(f"  ⏰ 주문 실행일 (시초가): {schedule['next_exec']}  09:00 KST 전 실행 권장")
+    print(f"\n  Next signal date : {schedule['next_rebal']}")
+    print(f"  Execution date   : {schedule['next_exec']}  (recommended before 09:00 KST)")
 
     if state.get("current_holdings"):
-        print(f"  현재 보유 종목: {len(state['current_holdings'])}개  {state['current_holdings']}")
+        print(f"  Current holdings : {len(state['current_holdings'])} stocks  {state['current_holdings']}")
 
     if already_done:
-        print(f"\n  ✅ 이미 실행 완료된 리밸런싱입니다 (신호일: {schedule['next_rebal']})")
-        print(f"     강제 재실행: --force 플래그 추가")
+        print(f"\n  Already executed rebalancing for signal date {schedule['next_rebal']}.")
+        print(f"  Use --force to re-run.")
         if not getattr(args, "force", False):
             return
 
     status = schedule["status"]
     if status == "future":
         days = schedule["trading_days_left"]
-        print(f"\n  ⏳ {days} 거래일 후 실행일입니다. 아직 주문 불필요.")
-        print(f"     실행일 전날 저녁 or 당일 09:00 전에 --execute로 실행하세요.")
+        print(f"\n  {days} trading day(s) until execution. No orders needed yet.")
+        print(f"  Run with --execute on or before the execution date before 09:00 KST.")
         return
     elif status == "tomorrow":
-        print(f"\n  📅 내일({schedule['next_exec']})이 실행일입니다.")
-        print(f"     오늘 픽을 미리 계산하고, 내일 09:00 전에 --execute로 주문하세요.")
-        # 픽 계산은 계속 진행 (주문은 안 함)
+        print(f"\n  Execution date is tomorrow ({schedule['next_exec']}).")
+        print(f"  Picks computed now. Run with --execute tomorrow before 09:00 KST.")
+        # Continue to compute picks (no order submission yet)
     elif status == "today":
-        print(f"\n  ✅ 오늘({schedule['next_exec']})이 실행일입니다! 시초가 주문을 진행합니다.")
+        print(f"\n  Execution date is TODAY ({schedule['next_exec']}). Proceeding with open-market orders.")
 
-    # ── 4. 신규 픽 계산 ──────────────────────────────────────────────────
-    print("\n[3/4] 신규 포트폴리오 계산...")
+    # ── 4. Compute new picks ──────────────────────────────────────────────
+    print("\n[3/4] Computing new portfolio...")
 
     from ml.models.base import BaseRanker
     from ml.features import FeatureEngineer
@@ -590,7 +604,7 @@ Examples
         max_market_cap=max_cap,
     )
     if pred_df.empty:
-        print("ERROR: 예측 데이터 없음. DB 업데이트 확인 필요.")
+        print("ERROR: No prediction data available. Check DB update.")
         sys.exit(1)
 
     # Filter suspended stocks
@@ -611,15 +625,15 @@ Examples
     pred_df["rank"] = pred_df["score_rank"].rank(ascending=False, method="first").astype(int)
     new_picks = pred_df.sort_values("rank")
 
-    # 현재 보유 종목 — live/state.json 우선, 없으면 picks.csv 기반
+    # Current holdings — prefer live/state.json; fall back to picks.csv on first run
     if state.get("current_holdings") and state.get("run_name") == run_name:
         current_holdings = set(state["current_holdings"])
-        print(f"  [State] 보유 종목 {len(current_holdings)}개 (live/state.json 기준)")
+        print(f"  [State] {len(current_holdings)} holdings loaded from live/state.json")
     else:
         current_holdings = get_current_holdings(run_dir)
-        print(f"  [State] 보유 종목 {len(current_holdings)}개 (picks.csv 기준 — 첫 실행)")
+        print(f"  [State] {len(current_holdings)} holdings loaded from picks.csv (first run)")
 
-    # 주문 생성
+    # Build orders
     sell_orders, buy_orders = build_orders(
         new_picks=new_picks,
         current_holdings=current_holdings,
@@ -629,42 +643,41 @@ Examples
 
     print_order_summary(schedule, current_holdings, new_picks, sell_orders, buy_orders, top_n)
 
-    # ── 5. 주문 실행 ──────────────────────────────────────────────────────
+    # ── 5. Submit orders ──────────────────────────────────────────────────
     if status == "tomorrow" and not args.execute:
-        print("\n  [Tomorrow] 픽 계산 완료. 내일 아침 09:00 전에 아래 명령어로 주문하세요:")
+        print("\n  [Tomorrow] Picks computed. Run with --execute tomorrow before 09:00 KST:")
         print(f"  python3 scripts/run_live.py --run {run_name} --execute")
         return
 
     if not args.execute:
-        print("\n  [Dry-run] --execute 플래그 없음. 주문 제출 안 함.")
-        print(f"  실제 주문: python3 scripts/run_live.py --run {run_name} --execute")
+        print("\n  [Dry-run] --execute flag not set. No orders submitted.")
+        print(f"  To place orders: python3 scripts/run_live.py --run {run_name} --execute")
         return
 
-    print("\n[4/4] 주문 제출...")
+    print("\n[4/4] Submitting orders...")
 
-    # 최종 확인
     total = len(sell_orders) + len(buy_orders)
-    confirm = input(f"\n  매도 {len(sell_orders)}건 + 매수 {len(buy_orders)}건 ({total}건) 주문하겠습니까? (y/n): ").strip().lower()
+    confirm = input(f"\n  Confirm {len(sell_orders)} sell + {len(buy_orders)} buy ({total} total)? (y/n): ").strip().lower()
     if confirm != "y":
-        print("  취소했습니다.")
+        print("  Cancelled.")
         return
 
     client = KiwoomClient()
     if not client.authenticate():
-        print("  인증 실패. 주문 중단.")
+        print("  Authentication failed. Aborting.")
         return
 
-    # 매도 먼저
-    print(f"\n  매도 주문 ({len(sell_orders)}건):")
+    # Sell first to free up capital
+    print(f"\n  Sell orders ({len(sell_orders)}):")
     for o in sell_orders:
         client.order_sell(o["stock_code"], o["quantity"], price=0)
 
-    # 매수
-    print(f"\n  매수 주문 ({len(buy_orders)}건):")
+    # Then buy
+    print(f"\n  Buy orders ({len(buy_orders)}):")
     for o in buy_orders:
         client.order_buy(o["stock_code"], o["quantity"], price=0)
 
-    # state 저장
+    # Persist state
     new_holdings = list(set(new_picks.head(top_n)["stock_code"].tolist()))
     save_order_log(schedule["next_exec"], sell_orders, buy_orders, new_holdings)
     save_state({
@@ -674,7 +687,7 @@ Examples
         "last_updated":        datetime.now().isoformat(),
     })
 
-    print("\n  ✅ 주문 완료.")
+    print("\n  Done.")
 
 
 if __name__ == "__main__":

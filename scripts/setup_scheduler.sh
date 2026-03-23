@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup_scheduler.sh — install/uninstall the AlgoStock launchd scheduler.
+# setup_scheduler.sh — install/uninstall the AlphaKRX launchd scheduler.
 #
 # Usage:
 #   ./scripts/setup_scheduler.sh start           # install with defaults
@@ -39,7 +39,7 @@ done
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 do_start() {
-  echo "Installing AlgoStock scheduler..."
+  echo "Installing AlphaKRX scheduler..."
   echo "  Time:      $(printf '%02d:%02d' $HOUR $MIN) (local time)"
   echo "  Run:       ${RUN_NAME:-auto (latest in runs/)}"
   echo "  Portfolio: $PORTFOLIO KRW"
@@ -109,7 +109,7 @@ EOF
 }
 
 do_stop() {
-  echo "Removing AlgoStock scheduler..."
+  echo "Removing AlphaKRX scheduler..."
   if launchctl list | grep -q "$PLIST_LABEL"; then
     launchctl unload "$PLIST_PATH" 2>/dev/null && echo "  Unloaded."
   else

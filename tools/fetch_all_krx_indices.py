@@ -1,5 +1,8 @@
 """
-Web scraper for KRX Index website to fetch all index constituent data.
+[UTILITY] Web scraper for KRX Index website to fetch all index constituent data.
+
+Standalone utility for bulk-downloading ALL KRX index CSVs in one pass.
+Use etl/index_constituents_etl.py for regular DB updates.
 
 This script:
 1. Scrapes https://index.krx.co.kr/contents/MKD/03/0304/03040200/MKD03040200.jsp
@@ -162,7 +165,7 @@ class KRXIndexScraper:
                     df = pd.read_csv(StringIO(response.text), encoding='cp949')
                     print(f"   ✅ Downloaded {len(df)} rows")
                     return True
-                except:
+                except Exception:
                     print(f"   ✅ Downloaded {len(response.content)} bytes")
                     return True
             else:

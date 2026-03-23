@@ -236,7 +236,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Get latest picks from unified model")
     parser.add_argument("--model", default="lgbm", choices=["lgbm", "xgboost", "catboost"],
                         help="Model type to use (default: lgbm)")
-    parser.add_argument("--db", default="krx_stock_data.db")
+    parser.add_argument("--db", default="data/krx_stock_data.db")
     parser.add_argument("--end", default=None, help="End date YYYYMMDD (default: today)")
     parser.add_argument("--horizon", type=int, default=21)
     parser.add_argument("--top", type=int, default=20)

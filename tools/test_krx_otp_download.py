@@ -1,7 +1,10 @@
 """
-Test script for KRX OTP-based CSV download.
+[DEV/DEBUG] Test script for KRX OTP-based CSV download.
 
-This script tests the two-step OTP flow to download CSV data from KRX:
+Used during development to verify the two-step OTP flow for downloading CSV data from KRX.
+Not part of the main ETL pipeline — kept for debugging KRX API connectivity issues.
+
+Flow:
 1. GET to GenerateOTP.jspx to get a temporary token
 2. POST that token to download.jspx to get CSV
 

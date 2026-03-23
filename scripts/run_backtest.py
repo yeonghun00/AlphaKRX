@@ -2199,7 +2199,7 @@ def main() -> None:
         choices=["lgbm", "xgboost", "catboost"],
         help="Model family",
     )
-    parser.add_argument("--db", type=str, default="krx_stock_data.db", help="SQLite DB path")
+    parser.add_argument("--db", type=str, default="data/krx_stock_data.db", help="SQLite DB path")
     parser.add_argument("--start", type=str, default="20100101", help="Start date (YYYYMMDD)")
     parser.add_argument("--end", type=str, default="20260213", help="End date (YYYYMMDD)")
     parser.add_argument("--horizon", type=int, default=63, help="Forward return horizon (trading days)")

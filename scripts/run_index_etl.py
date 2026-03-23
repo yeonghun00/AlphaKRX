@@ -106,7 +106,7 @@ def backfill_index_data(
     end_date: str,
     index_types: List[str] = None,
     force: bool = False,
-    db_path: str = 'krx_stock_data.db'
+    db_path: str = 'data/krx_stock_data.db'
 ):
     """
     Backfill historical index data.
@@ -368,7 +368,7 @@ Available index types:
 """
     )
 
-    parser.add_argument('--db-path', default='krx_stock_data.db',
+    parser.add_argument('--db-path', default='data/krx_stock_data.db',
                         help='Database path (default: krx_stock_data.db)')
 
     # Mode arguments

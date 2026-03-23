@@ -10,6 +10,7 @@ Usage:
     python fetch_delisted_stocks_simple.py
 """
 
+import io
 import pandas as pd
 import requests
 import sqlite3
@@ -18,15 +19,10 @@ import sys
 import os
 from datetime import datetime
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 
-def create_database_table(db_path="krx_stock_data.db"):
+def create_database_table(db_path="data/krx_stock_data.db"):
     """Create the delisted_stocks table if it doesn't exist."""
     try:
         with sqlite3.connect(db_path) as conn:
@@ -68,7 +64,7 @@ def parse_delisting_date(date_str):
         return None
 
 
-def insert_delisted_stocks_to_db(df, db_path="krx_stock_data.db"):
+def insert_delisted_stocks_to_db(df, db_path="data/krx_stock_data.db"):
     """Insert delisted stocks data into the database."""
     if df.empty:
         logger.warning("No data to insert into database")
@@ -120,7 +116,7 @@ def insert_delisted_stocks_to_db(df, db_path="krx_stock_data.db"):
         return False
 
 
-def get_database_stats(db_path="krx_stock_data.db"):
+def get_database_stats(db_path="data/krx_stock_data.db"):
     """Get statistics for the delisted_stocks table."""
     try:
         with sqlite3.connect(db_path) as conn:
@@ -204,11 +200,12 @@ def download_delisted_stocks():
             return None, None
         
         logger.info("Successfully downloaded Excel file")
-        
-        # Read Excel content with converters (as you specified)
-        # pd.read_html() reads all tables in HTML, returns list of DataFrames
-        # We use converters to ensure 종목코드 (stock code) is read as string
-        df_list = pd.read_html(response.content, converters={'종목코드': str})
+
+        # KRX returns HTML tables with application/vnd.ms-excel content-type.
+        # Wrap in io.StringIO so newer pandas treats it as HTML content,
+        # not a file path (which raises "No such file or directory").
+        html_content = response.content.decode('euc-kr').strip()
+        df_list = pd.read_html(io.StringIO(html_content), converters={'종목코드': str})
         
         if not df_list:
             logger.error("No tables found in Excel content")
@@ -237,7 +234,8 @@ def download_delisted_stocks():
         logger.error(f"Request failed: {e}")
         return None, None
     except Exception as e:
-        logger.error(f"Error processing data: {e}")
+        msg = str(e)
+        logger.error(f"Error processing data: {type(e).__name__}: {msg[:120]}{'...' if len(msg) > 120 else ''}")
         return None, None
 
 

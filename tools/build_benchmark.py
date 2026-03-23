@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-KOSPI200 유사 벤치마크 지수 생성 및 DB 저장
+KOSPI200-like benchmark index builder — constructs a synthetic benchmark and saves it to the DB.
 
-방식: 분기 시작일 기준 시총 상위 200개 고정
-      → 일별 시총가중 수익률 계산 → 누적해서 지수화
+Method: fix the top-200 stocks by market cap at each quarter start date
+        → compute daily market-cap-weighted returns → cumulate into an index series
+
+Note: This is a one-off utility script used during initial setup. The main ETL pipeline
+      (scripts/run_etl.py) is the preferred entry point for regular data updates.
 
 Usage:
     python3 build_benchmark.py
@@ -27,7 +30,7 @@ print('📊 KOSPI200 유사 벤치마크 생성')
 print(f'   {datetime.now().strftime("%Y-%m-%d %H:%M")}')
 print('=' * 70)
 
-DB_PATH = 'krx_stock_data.db'
+DB_PATH = 'data/krx_stock_data.db'
 TOP_N = 200  # 시총 상위 N개
 
 # ============================================================================

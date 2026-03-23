@@ -1,8 +1,8 @@
 """
 Financial Statement Data Loader
 
-Parses and loads BS (재무상태표), PL (손익계산서), CF (현금흐름표)
-from raw zip files into SQLite database.
+Parses and loads BS (Balance Sheet / 재무상태표), PL (Income Statement / 손익계산서),
+CF (Cash Flow / 현금흐름표) from raw zip files into SQLite database.
 
 Implements 45/90 rule to prevent look-ahead bias.
 """
@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -91,7 +90,7 @@ def get_available_date(fiscal_date: str, fiscal_month: int) -> str:
 
     Args:
         fiscal_date: Period end date (YYYY-MM-DD)
-        fiscal_month: Company's fiscal year end month (결산월)
+        fiscal_month: Company's fiscal year end month (결산월 / fiscal settlement month)
 
     Returns:
         First date the data can be used in trading (YYYYMMDD)
@@ -140,7 +139,7 @@ def extract_stock_code(raw_code: str) -> str:
 
 
 def extract_consolidation_type(statement_type: str) -> str:
-    """Extract 별도/연결 from statement type string."""
+    """Extract consolidation type (별도=standalone / 연결=consolidated) from statement type string."""
     if '연결' in str(statement_type):
         return '연결'
     elif '별도' in str(statement_type):
@@ -412,7 +411,7 @@ class FinancialDataLoader:
 
             # Parse values based on report type
             if is_quarterly:
-                # Quarterly: cols 12-17 (당기3개월, 당기누적, 전기3개월, 전기누적, 전기연간, 전전기연간)
+                # Quarterly: cols 12-17 (당기3개월=current Q, 당기누적=current YTD, 전기3개월=prior Q, 전기누적=prior YTD, 전기연간=prior annual, 전전기연간=2yr-ago annual)
                 amount_current_qtr = parse_number(row.iloc[12]) if len(row) > 12 else None
                 amount_current_ytd = parse_number(row.iloc[13]) if len(row) > 13 else None
                 amount_prev_qtr = parse_number(row.iloc[14]) if len(row) > 14 else None
@@ -420,7 +419,7 @@ class FinancialDataLoader:
                 amount_prev_year = parse_number(row.iloc[16]) if len(row) > 16 else None
                 amount_prev2_year = parse_number(row.iloc[17]) if len(row) > 17 else None
             else:
-                # Annual: cols 13 (당기), 16 (전기), 17 (전전기) - with empty cols
+                # Annual: cols 13 (당기=current year), 16 (전기=prior year), 17 (전전기=2yr-ago) - with empty cols
                 amount_current_qtr = None
                 amount_current_ytd = parse_number(row.iloc[13]) if len(row) > 13 else None
                 amount_prev_qtr = None
@@ -633,7 +632,7 @@ if __name__ == "__main__":
     project_root = script_dir.parent
 
     # Default paths (relative to project root)
-    db_path = project_root / "krx_stock_data.db"
+    db_path = project_root / "data" / "krx_stock_data.db"
     raw_data_dir = project_root / "data" / "raw_financial"
 
     if len(sys.argv) > 1:

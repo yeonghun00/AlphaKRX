@@ -1,6 +1,6 @@
 {
   "database": {
-    "path": "krx_stock_data.db",
+    "path": "data/krx_stock_data.db",
     "backup_enabled": true,
     "backup_interval_days": 7,
     "max_log_entries": 10000,

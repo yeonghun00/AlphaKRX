@@ -75,7 +75,7 @@ class KRXIndexConstituentsDirect:
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_full_path = os.path.join(project_root, config_path)
         self.config = load_config(config_full_path)
-        self.db_path = self.config.get('database', {}).get('path', 'krx_stock_data.db')
+        self.db_path = self.config.get('database', {}).get('path', 'data/krx_stock_data.db')
         
         # Create database table if it doesn't exist
         self._create_table()
@@ -161,21 +161,24 @@ class KRXIndexConstituentsDirect:
         driver.execute_script('Object.defineProperty(navigator, "webdriver", {get: () => undefined})')
         return driver
 
-    def scrape_listing_page(self, market: str) -> List[Dict]:
+    def scrape_listing_page(self, market: str, _attempt: int = 1) -> List[Dict]:
         """Fetch the KRX index listing page using Selenium and extract index links."""
         config = self.MARKET_CONFIG[market]
         listing_url = f'{self.BASE_URL}{config["listing_path"]}'
         indices = []
         driver = None
 
-        print(f"Fetching {market.upper()} listing page with Selenium: {listing_url}")
+        if _attempt > 1:
+            print(f"Retrying {market.upper()} listing page (attempt {_attempt}/3): {listing_url}")
+        else:
+            print(f"Fetching {market.upper()} listing page with Selenium: {listing_url}")
 
         try:
             driver = self._create_driver()
             driver.get(listing_url)
 
-            # Wait for the page to load
-            wait = WebDriverWait(driver, 10)
+            # Wait for the page to load; increase timeout on each retry
+            wait = WebDriverWait(driver, 15 * _attempt)
             wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'a[href*="MKD03040101.jsp"]')))
 
             print(f"Page loaded successfully")
@@ -191,10 +194,10 @@ class KRXIndexConstituentsDirect:
                 max_scroll_attempts = 200  # Safety limit
                 scroll_increment = 300  # Pixels to scroll each time
                 no_progress_count = 0
-                current_category = ''  # Track 구분 category across rows (rowspan pattern)
+                current_category = ''  # Track 구분 (category/classification) across rows (rowspan pattern)
 
                 while scroll_attempts < max_scroll_attempts:
-                    # Iterate rows to track category (구분 uses rowspan, so some rows only have the link td)
+                    # Iterate rows to track category (구분=classification uses rowspan, so some rows only have the link td)
                     rows = driver.find_elements(By.CSS_SELECTOR, 'tbody.CI-GRID-BODY-TABLE-TBODY tr')
 
                     new_links_found = 0
@@ -207,7 +210,7 @@ class KRXIndexConstituentsDirect:
                         first_td_links = tds[0].find_elements(By.CSS_SELECTOR, 'a[href*="MKD03040101.jsp"]')
 
                         if len(tds) >= 2 and not first_td_links:
-                            # First td is the 구분 category cell; second td has the index link
+                            # First td is the 구분 (category/classification) cell; second td has the index link
                             cat_text = tds[0].text.strip()
                             if cat_text:
                                 current_category = cat_text
@@ -272,7 +275,7 @@ class KRXIndexConstituentsDirect:
                 # Fallback: if we can't find the scrollable container, use the original method
                 print(f"Could not find scrollable table container ({scroll_error}), using fallback method")
 
-                # Iterate rows to track 구분 category (non-scrolling fallback)
+                # Iterate rows to track 구분 (category/classification) — non-scrolling fallback
                 current_category = ''
                 rows = driver.find_elements(By.CSS_SELECTOR, 'tr')
 
@@ -316,6 +319,12 @@ class KRXIndexConstituentsDirect:
                             })
 
         except Exception as e:
+            if _attempt < 3:
+                print(f"Selenium scraping failed (attempt {_attempt}/3): {type(e).__name__}. Retrying in {5 * _attempt}s...")
+                if driver:
+                    driver.quit()
+                time.sleep(5 * _attempt)
+                return self.scrape_listing_page(market, _attempt + 1)
             print(f"Error during Selenium scraping: {e}")
             raise
         finally:
@@ -529,7 +538,7 @@ class KRXIndexConstituentsDirect:
                     except Exception as cleanup_error:
                         print(f"   Warning: Could not delete temporary file: {cleanup_error}")
             
-            # Find the column with stock codes (should be '종목코드')
+            # Find the column with stock codes (should be '종목코드' = stock code)
             stock_code_column = None
             for col in df.columns:
                 if '종목코드' in col:

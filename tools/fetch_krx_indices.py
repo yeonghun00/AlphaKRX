@@ -1,5 +1,8 @@
 """
-KRX Index Scraper using Selenium for listing page and requests for downloads.
+[UTILITY] KRX Index Scraper using Selenium for listing page and requests for downloads.
+
+Standalone utility for downloading raw KRX index constituent CSVs to data/krx_indices/.
+The main ETL pipeline (etl/index_constituents_etl.py) handles ongoing DB updates.
 
 This script:
 1. Fetches the KRX index listing page (KOSPI or KOSDAQ) using Selenium

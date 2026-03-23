@@ -53,7 +53,7 @@ class FeatureEngineer:
 
     FEATURE_COLUMNS = _FeatureColumnsDescriptor()
 
-    def __init__(self, db_path: str = "krx_stock_data.db"):
+    def __init__(self, db_path: str = "data/krx_stock_data.db"):
         self.db_path = db_path
         self.logger = logging.getLogger(__name__)
         self._conn: Optional[sqlite3.Connection] = None
@@ -75,6 +75,15 @@ class FeatureEngineer:
             pass
         self._conn = conn
         return conn
+
+    def close(self) -> None:
+        """Close the cached database connection."""
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+    def __del__(self) -> None:
+        self.close()
 
     @staticmethod
     def _to_iso(date_yyyymmdd: str) -> str:
@@ -695,7 +704,7 @@ class FeatureEngineer:
                 last_price[nan_mask] / out.loc[nan_mask, price_col] - 1
             )
 
-            # Fix B: Frozen price at T+horizon → stock was suspended (거래정지).
+            # Fix B: Frozen price at T+horizon → stock was suspended (거래정지, trading halt).
             if "value" in out.columns:
                 future_value = g["value"].shift(-target_horizon)
                 frozen_mask = (
@@ -812,7 +821,7 @@ class FeatureEngineer:
         # Fix A: NaN (delisted / data tail before T+horizon)
         _nm = data[_fwd_col].isna() & data[_pc].gt(0)
         data.loc[_nm, _fwd_col] = _last_px[_nm] / data.loc[_nm, _pc] - 1
-        # Fix B: frozen price (거래정지) at T+horizon
+        # Fix B: frozen price (거래정지, trading halt) at T+horizon
         if "value" in data.columns:
             _fv = _g["value"].shift(-target_horizon)
             _fm = data[_fwd_col].notna() & data[_pc].gt(0) & (_fv == 0)
@@ -1067,7 +1076,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    fe = FeatureEngineer("krx_stock_data.db")
+    fe = FeatureEngineer("data/krx_stock_data.db")
     out = fe.prepare_ml_data(
         start_date=args.start,
         end_date=args.end,

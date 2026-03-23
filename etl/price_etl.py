@@ -11,10 +11,12 @@ import os
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple, Set
 
+logger = logging.getLogger(__name__)
+
 class CleanETLPipeline:
     """Clean ETL pipeline with direct normalization."""
 
-    def __init__(self, db_path: str = "krx_stock_data.db"):
+    def __init__(self, db_path: str = "data/krx_stock_data.db"):
         """
         Initialize clean ETL pipeline.
 
@@ -232,17 +234,32 @@ class CleanETLPipeline:
         return len(stock_updates)
     
     def _insert_stock_history(self, cursor, stock_updates: List[Dict]):
-        """Insert historical metadata changes."""
+        """Insert a stock_history row only when metadata has actually changed."""
         if not stock_updates:
             return
-        
+
         for stock in stock_updates:
+            # Fetch the most recent recorded values for this stock
             cursor.execute('''
-                INSERT OR IGNORE INTO stock_history
-                (stock_code, effective_date, name, market_type, sector_type, shares_outstanding)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (stock['stock_code'], stock['effective_date'], stock['name'], 
-                  stock['market_type'], stock['sector_type'], stock['shares_outstanding']))
+                SELECT name, market_type, sector_type, shares_outstanding
+                FROM stock_history
+                WHERE stock_code = ?
+                ORDER BY effective_date DESC
+                LIMIT 1
+            ''', (stock['stock_code'],))
+            last = cursor.fetchone()
+
+            # Only insert if this is the first record or something changed
+            if last is None or last != (
+                stock['name'], stock['market_type'],
+                stock['sector_type'], stock['shares_outstanding']
+            ):
+                cursor.execute('''
+                    INSERT OR IGNORE INTO stock_history
+                    (stock_code, effective_date, name, market_type, sector_type, shares_outstanding)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (stock['stock_code'], stock['effective_date'], stock['name'],
+                      stock['market_type'], stock['sector_type'], stock['shares_outstanding']))
     
     def _extract_prices(self, raw_data: List[Dict]) -> List[Dict]:
         """Extract price data for normalized insertion."""
@@ -534,7 +551,7 @@ def main():
     parser.add_argument('--daily-update', action='store_true', help='Run daily update')
     parser.add_argument('--date', type=str, help='Specific date for daily update (YYYYMMDD)')
     parser.add_argument('--markets', type=str, default='kospi', help='Comma-separated list of markets to fetch (kospi,kosdaq,kodex)')
-    parser.add_argument('--db-path', type=str, default='krx_stock_data.db', help='Database path')
+    parser.add_argument('--db-path', type=str, default='data/krx_stock_data.db', help='Database path')
     
     args = parser.parse_args()
     
@@ -542,27 +559,27 @@ def main():
     pipeline = CleanETLPipeline(args.db_path)
     
     if args.create_schema:
-        print("Schema already created during initialization")
+        logger.info("Schema already created during initialization")
         return
-    
+
     if args.backfill:
         if not args.start_date or not args.end_date:
-            print("Error: --start-date and --end-date are required for backfill")
+            logger.error("--start-date and --end-date are required for backfill")
             sys.exit(1)
-        
+
         # Parse markets argument
         markets = [m.strip() for m in args.markets.split(',')]
         valid_markets = ['kospi', 'kosdaq', 'kodex']
         markets = [m for m in markets if m in valid_markets]
-        
+
         if not markets:
-            print("Error: No valid markets specified. Use: kospi,kosdaq,kodex")
+            logger.error("No valid markets specified. Use: kospi,kosdaq,kodex")
             sys.exit(1)
-        
-        print(f"Starting backfill from {args.start_date} to {args.end_date}")
-        print(f"Fetching data for markets: {', '.join(markets)}")
+
+        logger.info("Starting backfill from %s to %s", args.start_date, args.end_date)
+        logger.info("Fetching data for markets: %s", ', '.join(markets))
         if args.force:
-            print("Force flag enabled - will process all dates regardless of existing data")
+            logger.info("Force flag enabled - will process all dates regardless of existing data")
         
         # Import KRX API and config
         from krx_api import KRXAPI
@@ -574,47 +591,47 @@ def main():
         # Check for resume capability
         progress_data = pipeline.load_progress()
         if progress_data and not args.force:
-            print(f"Found existing progress: {progress_data.get('progress_percentage', 0):.1f}% complete")
+            logger.info("Found existing progress: %.1f%% complete", progress_data.get('progress_percentage', 0))
             resume = input("Resume from last processed date? (y/n): ").lower().strip()
             if resume == 'y':
                 start_date_str = progress_data.get('last_processed_date')
                 if start_date_str:
-                    print(f"Resuming from {start_date_str}")
+                    logger.info("Resuming from %s", start_date_str)
                     # Adjust start date to continue from next trading day
                     from datetime import timedelta
                     resume_date = datetime.strptime(start_date_str, '%Y%m%d') + timedelta(days=1)
                     args.start_date = resume_date.strftime('%Y%m%d')
-                    print(f"Adjusted start date to: {args.start_date}")
-        
+                    logger.info("Adjusted start date to: %s", args.start_date)
+
         # Generate date range
         start_date = datetime.strptime(args.start_date, '%Y%m%d')
         end_date = datetime.strptime(args.end_date, '%Y%m%d')
-        
+
         # Get progress information
         progress = pipeline.get_backfill_progress(args.start_date, args.end_date)
-        print(f"Total trading days to process: {progress['total_trading_days']}")
-        print(f"Already processed: {progress['processed_dates']}")
-        print(f"Remaining: {progress['remaining_dates']}")
-        print(f"Progress: {progress['progress_percentage']:.1f}%")
-        
+        logger.info("Total trading days to process: %s", progress['total_trading_days'])
+        logger.info("Already processed: %s", progress['processed_dates'])
+        logger.info("Remaining: %s", progress['remaining_dates'])
+        logger.info("Progress: %.1f%%", progress['progress_percentage'])
+
         # Use parallel processing for better performance
-        print("Using optimized parallel processing...")
+        logger.info("Using optimized parallel processing...")
         
         try:
             # Determine which dates to process based on force flag
             if args.force:
                 # When force is used, process all trading dates
-                print("Force flag enabled - will process all dates regardless of existing data")
+                logger.info("Force flag enabled - will process all dates regardless of existing data")
                 dates_to_process = progress['remaining_dates_list'] + progress['processed_dates_list']
                 dates_to_process.sort()
             else:
                 # When force is not used, only process dates without existing data
                 dates_to_process = progress['remaining_dates_list']
                 if not dates_to_process:
-                    print("All dates already processed. Use --force to reprocess existing data.")
+                    logger.info("All dates already processed. Use --force to reprocess existing data.")
                     return
-            
-            print(f"Processing {len(dates_to_process)} dates...")
+
+            logger.info("Processing %d dates...", len(dates_to_process))
             
             processed_dates = 0
             total_records = 0
@@ -637,8 +654,8 @@ def main():
                             total_records += result['prices_processed']
                             processed_dates += 1
                             
-                            print(f"Processed {result['prices_processed']} records for {date_str}")
-                            
+                            logger.info("Processed %d records for %s", result['prices_processed'], date_str)
+
                             # Save progress periodically
                             if processed_dates % 10 == 0:  # Save every 10 dates
                                 progress_info = {
@@ -651,10 +668,10 @@ def main():
                                 }
                                 pipeline.save_progress(progress_info)
                     else:
-                        print(f"No data available for {date_str}")
-                        
+                        logger.warning("No data available for %s", date_str)
+
                 except Exception as e:
-                    print(f"Error processing {date_str}: {e}")
+                    logger.error("Error processing %s: %s", date_str, e)
                     # Save progress on error for resume capability
                     error_progress = {
                         'start_date': args.start_date,
@@ -667,21 +684,21 @@ def main():
                     }
                     pipeline.save_progress(error_progress)
             
-            print(f"Backfill completed. Processed {processed_dates} dates with {total_records} total records.")
-            
+            logger.info("Backfill completed. Processed %d dates with %d total records.", processed_dates, total_records)
+
             # Final progress update
             final_progress = pipeline.get_backfill_progress(args.start_date, args.end_date)
-            print(f"Final progress: {final_progress['progress_percentage']:.1f}%")
-            
+            logger.info("Final progress: %.1f%%", final_progress['progress_percentage'])
+
             # Clean up progress file if completed
             if final_progress['remaining_dates'] == 0:
                 progress_file = f"{args.db_path}.progress.json"
                 if os.path.exists(progress_file):
                     os.remove(progress_file)
-                    print("Backfill completed - progress file cleaned up")
-            
+                    logger.info("Backfill completed - progress file cleaned up")
+
         except Exception as e:
-            print(f"Error during backfill: {e}")
+            logger.error("Error during backfill: %s", e)
             # Save progress on error for resume capability
             error_progress = {
                 'start_date': args.start_date,
@@ -693,7 +710,7 @@ def main():
                 'error': str(e)
             }
             pipeline.save_progress(error_progress)
-            print("Progress saved - you can resume later")
+            logger.info("Progress saved - you can resume later")
     
     elif args.daily_update:
         # Parse markets argument
@@ -702,29 +719,29 @@ def main():
         markets = [m for m in markets if m in valid_markets]
         
         if not markets:
-            print("Error: No valid markets specified. Use: kospi,kosdaq,kodex")
+            logger.error("No valid markets specified. Use: kospi,kosdaq,kodex")
             sys.exit(1)
-        
+
         # Import KRX API and config
         from krx_api import KRXAPI
         from config import load_config
-        
+
         config_dict = load_config()
         api = KRXAPI(config_dict['api']['auth_key'], config_dict.get('api', {}))
-        
+
         # Calculate yesterday's date
         if args.date:
             date_str = args.date
         else:
             yesterday = datetime.now() - timedelta(days=1)
             date_str = yesterday.strftime('%Y%m%d')
-        
-        print(f"Running daily update for {date_str}")
-        print(f"Fetching data for markets: {', '.join(markets)}")
-        
+
+        logger.info("Running daily update for %s", date_str)
+        logger.info("Fetching data for markets: %s", ', '.join(markets))
+
         # Check if data already exists (unless force flag is used)
         if not args.force and pipeline.check_date_exists(date_str):
-            print(f"Skipping {date_str} - data already exists")
+            logger.info("Skipping %s - data already exists", date_str)
             return
         
         try:
@@ -743,15 +760,15 @@ def main():
             if raw_data:
                 # Process and store data
                 result = pipeline.process_data(raw_data)
-                print(f"Processed {result['prices_processed']} records for {date_str}")
+                logger.info("Processed %d records for %s", result['prices_processed'], date_str)
             else:
-                print(f"No data available for {date_str}")
-        
+                logger.warning("No data available for %s", date_str)
+
         except Exception as e:
-            print(f"Error processing {date_str}: {e}")
-    
+            logger.error("Error processing %s: %s", date_str, e)
+
     else:
-        print("Use --help for available options")
+        logger.info("Use --help for available options")
 
 
 if __name__ == '__main__':

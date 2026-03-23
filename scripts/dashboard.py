@@ -715,7 +715,7 @@ def build_html(figs: dict[str, go.Figure], title: str) -> str:
         f"<style>{_CSS}</style>"
         "</head><body>"
         f'<h1>📊 Quant Dashboard</h1>'
-        f'<p class="sub">AlgoStock &nbsp;·&nbsp; {title} &nbsp;·&nbsp; Dark Mode</p>'
+        f'<p class="sub">AlphaKRX &nbsp;·&nbsp; {title} &nbsp;·&nbsp; Dark Mode</p>'
         f'<div class="grid">{"".join(cards)}</div>'
         "</body></html>"
     )
@@ -730,7 +730,7 @@ def main() -> None:
     )
     ap.add_argument("run", nargs="?", default="",
                     help="Run name (e.g. 'twap5') — loads from runs/twap5/")
-    ap.add_argument("--db",             default="krx_stock_data.db",
+    ap.add_argument("--db",             default="data/krx_stock_data.db",
                     help="SQLite DB for market-cap/volume (optional)")
     ap.add_argument("--output",         default="",
                     help="Output HTML path (default: runs/<name>/dashboard.html)")

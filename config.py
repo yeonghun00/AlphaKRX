@@ -53,7 +53,7 @@ def get_database_path(config: Dict[str, Any]) -> str:
     Returns:
         str: Database path
     """
-    return config.get('database', {}).get('path', 'krx_stock_data.db')
+    return config.get('database', {}).get('path', 'data/krx_stock_data.db')
 
 def get_request_delay(config: Dict[str, Any]) -> float:
     """

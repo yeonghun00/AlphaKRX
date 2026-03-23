@@ -252,7 +252,7 @@ def run_prices_update(db_path: str, config: dict, markets: List[str], workers: i
                 days_ok += 1
                 logger.info(f"  {date_str}: {result['prices_processed']} records")
             else:
-                logger.info(f"  {date_str}: no data (holiday?)")
+                logger.info(f"  {date_str}: no data (holiday/weekend or pre-market)")
         except Exception as e:
             logger.error(f"  {date_str}: error - {e}")
 
@@ -295,7 +295,7 @@ def run_prices_backfill(db_path: str, config: dict, markets: List[str], workers:
                 if days_ok % 20 == 0:
                     logger.info(f"  Progress: {days_ok}/{len(dates_to_fetch)} days")
             else:
-                logger.info(f"  {date_str}: no data (holiday?)")
+                logger.info(f"  {date_str}: no data (holiday/weekend or pre-market)")
         except Exception as e:
             logger.error(f"  {date_str}: error - {e}")
 
@@ -456,7 +456,7 @@ def main():
 
     config_path = PROJECT_ROOT / "config.json"
     config = load_config(str(config_path))
-    db_path = config.get("database", {}).get("path", "krx_stock_data.db")
+    db_path = config.get("database", {}).get("path", "data/krx_stock_data.db")
     raw_financial_dir = PROJECT_ROOT / "data" / "raw_financial"
 
     # Print status before running
