@@ -19,12 +19,6 @@
 
 *Statistical significance: Sharpe t-stat 3.56 (p=0.001), Newey-West HAC t-stat 3.61 (p=0.000), IC t-stat 11.48 (p=0.000), Bootstrap Sharpe CI [0.58, 2.20] — all pass at 1%.*
 
-> **Honest caveats:**
-> - **Ex-2020 Sharpe: 0.83** — 2020 COVID recovery with a 10-stock concentrated portfolio carries a disproportionate share of total performance. Remove it and results are solid but unexceptional.
-> - **~30% cash drag** — portfolio is ~70% invested on average due to discrete share rounding. This mechanically reduces beta and flatters down-capture. Actual equity-level beta ≈ 0.42.
-> - **2025 benchmark data suspect** — benchmark shows +22% in December 2025 alone, likely a data error. 2025 alpha figure (-85.8%) should be disregarded.
-> - **Capacity constrained** — alpha collapses when filtering for stocks with >10B KRW daily trading value. Practical AUM limit ~5–15B KRW (~$4–10M USD).
-
 ![Backtest Report](runs/myrun/report.png)
 
 ---
