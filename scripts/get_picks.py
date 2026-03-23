@@ -263,7 +263,7 @@ def main() -> None:
     parser.add_argument("--view", choices=["compact", "full"], default="full",
                         help="Column set for terminal display")
     parser.add_argument("--target-return", type=float, default=0.05,
-                        help="매도가 = 매수가 × (1 + target_return). Default: 0.05 (5%%)")
+                        help="sell_price = buy_price × (1 + target_return). Default: 0.05 (5%%)")
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--feature-importance", action="store_true",
                         help="Print feature group importance (gain) after loading model")
@@ -378,7 +378,7 @@ def main() -> None:
         feature_cols = [c for c in feature_cols if c in pred_df.columns]
 
     # ── Filters matching backtest universe construction ───────────────────
-    # 1. Exclude suspended stocks (거래정지: value == 0)
+    # 1. Exclude suspended stocks (trading halt: value == 0)
     if "value" in pred_df.columns:
         suspended_before = len(pred_df)
         pred_df = pred_df[pred_df["value"] > 0].copy()
@@ -409,9 +409,9 @@ def main() -> None:
 
     pred_df["rank"] = pred_df["score_rank"].rank(ascending=False, method="first").astype(int)
 
-    # 매수가 / 매도가
-    pred_df["매수가"] = pred_df["closing_price"].round(0).astype(int)
-    pred_df["매도가"] = (pred_df["closing_price"] * (1 + args.target_return)).round(0).astype(int)
+    # buy_price / sell_price
+    pred_df["buy_price"] = pred_df["closing_price"].round(0).astype(int)
+    pred_df["sell_price"] = (pred_df["closing_price"] * (1 + args.target_return)).round(0).astype(int)
 
     latest_date = pred_df["date"].max()
 
@@ -420,8 +420,8 @@ def main() -> None:
         "stock_code",
         "name",
         "sector",
-        "매수가",
-        "매도가",
+        "buy_price",
+        "sell_price",
         "closing_price",
         "market_cap",
         "score",
@@ -434,8 +434,8 @@ def main() -> None:
         "stock_code",
         "name",
         "sector",
-        "매수가",
-        "매도가",
+        "buy_price",
+        "sell_price",
         "closing_price",
         "market_cap",
         "score",

@@ -500,12 +500,12 @@ def summarize(results: pd.DataFrame, sector_rows: list, output_path: str = "back
     print(f"  Sharpe:           {s['sharpe']:>8.2f}   Calmar:    {s['calmar']:>8.2f}" if pd.notna(s['calmar']) else f"  Sharpe:           {s['sharpe']:>8.2f}   Calmar:        N/A")
     print(f"  Max Drawdown:     {s['max_dd']:>8.2%}   Max Underwater: {s['max_underwater']} rebals")
 
-    print(f"\n{'--- Trade Statistics (매매 세부 지표) ---':^70}")
-    print(f"  Win Rate:         {s['hit_rate']:>8.2%}   (벤치마크 대비 이긴 비율)")
+    print(f"\n{'--- Trade Statistics ---':^70}")
+    print(f"  Win Rate:         {s['hit_rate']:>8.2%}   (vs benchmark)")
     pf_str = f"{s['profit_factor']:.2f}" if np.isfinite(s['profit_factor']) else "INF"
-    print(f"  Profit Factor:    {pf_str:>8s}   (총이익/총손실, 1.5+ 우수, 2.0+ 성배)")
+    print(f"  Profit Factor:    {pf_str:>8s}   (total gain / total loss, 1.5+ good, 2.0+ excellent)")
     wl_str = f"{s['win_loss_ratio']:.2f}" if np.isfinite(s['win_loss_ratio']) else "INF"
-    print(f"  Win/Loss Ratio:   {wl_str:>8s}   (평균이익/평균손실)")
+    print(f"  Win/Loss Ratio:   {wl_str:>8s}   (avg gain / avg loss)")
     print(f"  Avg Win:          {s['avg_win']:>8.2%}   Avg Loss:  {s['avg_loss']:>8.2%}")
     if pd.notna(s['avg_turnover']):
         print(f"  Avg Turnover:     {s['avg_turnover']:>8.2%}   Total Tx Cost: {s['total_tx_cost']:>8.2%}")
@@ -514,13 +514,13 @@ def summarize(results: pd.DataFrame, sector_rows: list, output_path: str = "back
     if s.get("avg_sl_triggered", 0) > 0:
         print(f"  Avg SL Triggered: {s['avg_sl_triggered']:>8.2%}   (% of picks hitting stop-loss per rebalance)")
 
-    print(f"\n{'--- Market Regime Analysis (하락장 방어력) ---':^70}")
+    print(f"\n{'--- Market Regime Analysis ---':^70}")
     uc_str = f"{s['up_capture']:.2f}" if pd.notna(s['up_capture']) else "N/A"
     dc_str = f"{s['down_capture']:.2f}" if pd.notna(s['down_capture']) else "N/A"
-    print(f"  Up Capture:       {uc_str:>8s}   (시장 1% 상승시 포트폴리오 변동)")
-    print(f"  Down Capture:     {dc_str:>8s}   (0.7 이하면 우수한 방어력)")
+    print(f"  Up Capture:       {uc_str:>8s}   (portfolio move per 1% market move)")
+    print(f"  Down Capture:     {dc_str:>8s}   (<0.7 = strong downside defense)")
     beta_str = f"{s['overall_beta']:.2f}" if pd.notna(s['overall_beta']) else "N/A"
-    print(f"  Overall Beta:     {beta_str:>8s}   (0.5 이하면 독자적 알파)")
+    print(f"  Overall Beta:     {beta_str:>8s}   (<0.5 = independent alpha)")
 
     print(f"\n{'--- IC & Quintile ---':^70}")
     if pd.notna(s['ic_mean']):
@@ -536,7 +536,7 @@ def summarize(results: pd.DataFrame, sector_rows: list, output_path: str = "back
         sh = f"{row['ann_sharpe']:.2f}" if pd.notna(row["ann_sharpe"]) else "N/A"
         annual_rows.append([str(int(yr)), f"{row['ann_port']:.2%}", f"{row['ann_alpha']:.2%}", sh])
     _print_table(
-        "--- Annual Sharpe (연도별 안정성) ---",
+        "--- Annual Sharpe ---",
         ["Year", "Return", "Alpha", "Sharpe"],
         annual_rows,
     )
@@ -561,7 +561,7 @@ def summarize(results: pd.DataFrame, sector_rows: list, output_path: str = "back
                 f"{row['avg_weight']:.1%}",
             ])
         _print_table(
-            "--- Sector Attribution (섹터 귀인 분석) ---",
+            "--- Sector Attribution ---",
             ["Sector", "Contribution", "Share", "Avg Weight"],
             sec_rows,
         )
@@ -605,7 +605,7 @@ def summarize(results: pd.DataFrame, sector_rows: list, output_path: str = "back
             stars = "***" if p < 0.01 else ("**" if p < 0.05 else ("*" if p < 0.10 else ""))
             return f"{t:+.2f}  (p={p:.3f}) {stars}"
 
-        print(f"\n{'--- Statistical Significance (통계적 유의성) ---':^70}")
+        print(f"\n{'--- Statistical Significance ---':^70}")
         print(f"  Observations (N):     {sig.get('ic_n', s['n_rebalances'])} IC periods  |  "
               f"{s['n_rebalances']} portfolio rebalances")
         print(f"")
@@ -660,16 +660,8 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
         print("[Report] matplotlib not installed, skipping visual report.")
         return
 
-    # Try Korean font
-    try:
-        import matplotlib.font_manager as fm
-        korean_fonts = [f.name for f in fm.fontManager.ttflist if any(
-            k in f.name for k in ["Nanum", "Malgun", "Apple SD", "NanumGothic", "AppleGothic"]
-        )]
-        if korean_fonts:
-            plt.rcParams["font.family"] = korean_fonts[0]
-    except Exception:
-        pass
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = ["Helvetica Neue", "Arial", "Helvetica", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
 
     # Color palette
@@ -744,7 +736,7 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
                      va="bottom" if v >= 0 else "top", fontsize=8, fontweight="bold")
     ax3.set_xticks(range(len(yrs)))
     ax3.set_xticklabels(yrs, rotation=45, fontsize=8)
-    ax3.set_title("Annual Sharpe Ratio (연도별 안정성)", fontsize=13, fontweight="bold")
+    ax3.set_title("Annual Sharpe Ratio", fontsize=13, fontweight="bold")
     ax3.legend(fontsize=9)
     ax3.grid(True, axis="y", alpha=0.3)
 
@@ -759,15 +751,15 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
     dc_color = C_ALPHA if (pd.notna(dc_val) and dc_val < 0.7) else C_WARN
 
     stats_lines = [
-        ("Trade Statistics (매매 세부 지표)", "", 16, "bold", "black"),
+        ("Trade Statistics", "", 16, "bold", "black"),
         ("", "", 6, "normal", "black"),
-        ("Win Rate (승률)", f"{s['hit_rate']:.1%}", 14, "bold", wr_color),
-        ("Profit Factor (수익인자)", f"{pf_val:.2f}" if np.isfinite(pf_val) else "INF", 14, "bold", pf_color),
-        ("Win/Loss Ratio (손익비)", f"{s['win_loss_ratio']:.2f}" if np.isfinite(s['win_loss_ratio']) else "INF", 14, "bold", C_PORT),
+        ("Win Rate", f"{s['hit_rate']:.1%}", 14, "bold", wr_color),
+        ("Profit Factor", f"{pf_val:.2f}" if np.isfinite(pf_val) else "INF", 14, "bold", pf_color),
+        ("Win/Loss Ratio", f"{s['win_loss_ratio']:.2f}" if np.isfinite(s['win_loss_ratio']) else "INF", 14, "bold", C_PORT),
         ("Avg Win", f"{s['avg_win']:+.2%}", 12, "normal", C_ALPHA),
         ("Avg Loss", f"{s['avg_loss']:+.2%}", 12, "normal", C_NEG),
         ("", "", 10, "normal", "black"),
-        ("Market Regime (하락장 방어력)", "", 16, "bold", "black"),
+        ("Market Regime", "", 16, "bold", "black"),
         ("", "", 6, "normal", "black"),
         ("Up Capture", f"{s['up_capture']:.2f}" if pd.notna(s['up_capture']) else "N/A", 14, "bold", C_PORT),
         ("Down Capture", f"{dc_val:.2f}" if pd.notna(dc_val) else "N/A", 14, "bold", dc_color),
@@ -830,7 +822,7 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
         ax6b.set_ylabel("Beta", fontsize=10, color=C_WARN)
         ax6b.tick_params(axis="y", colors=C_WARN)
         ax6b.set_ylim(-0.5, 2.5)
-    ax6.set_title("Rolling Sharpe & Beta (시장 상관 변화)", fontsize=13, fontweight="bold")
+    ax6.set_title("Rolling Sharpe & Beta", fontsize=13, fontweight="bold")
     ax6.set_ylabel("Sharpe", fontsize=10)
     ax6.legend(loc="upper left", fontsize=9)
     ax6.grid(True, alpha=0.3)
@@ -849,7 +841,7 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
         for i, v in enumerate(top_sec.values):
             ax7.annotate(f"{v:.2%}", (v * 100, i), ha="left" if v > 0 else "right",
                          va="center", fontsize=8, fontweight="bold")
-        ax7.set_title("Sector Attribution (섹터별 기여도)", fontsize=13, fontweight="bold")
+        ax7.set_title("Sector Attribution", fontsize=13, fontweight="bold")
         ax7.set_xlabel("Cumulative Contribution (%)", fontsize=10)
 
         # HHI annotation
@@ -880,7 +872,7 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
     ax8.set_ylim(lims)
     ax8.set_xlabel("Benchmark Return (%)", fontsize=10)
     ax8.set_ylabel("Portfolio Return (%)", fontsize=10)
-    ax8.set_title("Up/Down Capture (시장 상승 vs 하락 구간)", fontsize=13, fontweight="bold")
+    ax8.set_title("Up/Down Market Capture", fontsize=13, fontweight="bold")
     ax8.legend(fontsize=9)
     ax8.grid(True, alpha=0.3)
 
@@ -898,7 +890,7 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
         ax9.axhline(0, color="black", linewidth=0.5)
         ax9.axhline(s["ic_mean"], color=C_WARN, linewidth=1, linestyle="--", alpha=0.7,
                      label=f"Mean IC={s['ic_mean']:.4f}")
-        ax9.set_title("Spearman IC Over Time (예측력 변화)", fontsize=13, fontweight="bold")
+        ax9.set_title("Spearman IC Over Time", fontsize=13, fontweight="bold")
         ax9.set_ylabel("IC", fontsize=10)
         ax9.legend(fontsize=9)
     else:
@@ -1305,7 +1297,7 @@ def _run_fold(payload: dict) -> dict:
         day_df = day_df[day_df["market_cap"] >= min_market_cap].copy()
         if max_market_cap:
             day_df = day_df[day_df["market_cap"] <= max_market_cap].copy()
-        # Exclude suspended stocks (거래정지): zero daily trading value means
+        # Exclude suspended stocks (trading halted): zero daily trading value means
         # the stock is halted and cannot be traded at this rebalance date.
         if "value" in day_df.columns:
             day_df = day_df[day_df["value"] > 0].copy()
@@ -1494,7 +1486,7 @@ def _run_fold(payload: dict) -> dict:
 
         # Collect per-pick details for optional CSV export
         pick_detail_cols = ["stock_code", "name", "sector", "closing_price", "shares", "invested_krw",
-                            "매수가", "매도가", "매도날짜", "market_cap", "score", "score_rank", "rank_pos", eval_fwd_col]
+                            "buy_price", "sell_price", "sell_date", "market_cap", "score", "score_rank", "rank_pos", eval_fwd_col]
         pick_detail_cols = [c for c in pick_detail_cols if c in picks.columns]
         for _, prow in picks.iterrows():
             pick_rows.append({
@@ -1743,8 +1735,8 @@ def run(args: argparse.Namespace) -> None:
         )
 
         # Store exact entry/exit prices for picks.csv
-        _df_tw["매수가"] = entry_avg.round(0)
-        _df_tw["매도가"] = exit_avg.round(0)
+        _df_tw["buy_price"] = entry_avg.round(0)
+        _df_tw["sell_price"] = exit_avg.round(0)
 
         df = _df_tw
         eval_fwd_col = twap_col   # overrides exec_lag if both set
@@ -1762,13 +1754,13 @@ def run(args: argparse.Namespace) -> None:
         _grp_px_exec = _df_base.groupby("stock_code")[trade_price_col]
         _grp_date = _df_base.groupby("stock_code")["date"]
         if exec_lag > 0:
-            _df_base["매수가"] = _grp_px_exec.shift(-exec_lag).round(0)
-            _df_base["매도가"] = _grp_px_exec.shift(-(args.horizon + exec_lag)).round(0)
-            _df_base["매도날짜"] = _grp_date.shift(-(args.horizon + exec_lag))
+            _df_base["buy_price"] = _grp_px_exec.shift(-exec_lag).round(0)
+            _df_base["sell_price"] = _grp_px_exec.shift(-(args.horizon + exec_lag)).round(0)
+            _df_base["sell_date"] = _grp_date.shift(-(args.horizon + exec_lag))
         else:
-            _df_base["매수가"] = _df_base["closing_price"].round(0)
-            _df_base["매도가"] = _grp_px_close.shift(-args.horizon).round(0)
-            _df_base["매도날짜"] = _grp_date.shift(-args.horizon)
+            _df_base["buy_price"] = _df_base["closing_price"].round(0)
+            _df_base["sell_price"] = _grp_px_close.shift(-args.horizon).round(0)
+            _df_base["sell_date"] = _grp_date.shift(-args.horizon)
         df = _df_base
 
     # ── Stop-Loss Pre-computation ─────────────────────────────────────────
@@ -2054,44 +2046,6 @@ def run(args: argparse.Namespace) -> None:
         results.to_csv(out_csv, index=False, encoding="utf-8-sig")
         print(f"Saved detailed results to {out_csv}")
 
-        rolling = results[["date", "portfolio_return"]].copy()
-        rolling["rolling_12_sharpe"] = (
-            rolling["portfolio_return"].rolling(12).mean()
-            / rolling["portfolio_return"].rolling(12).std().replace(0, np.nan)
-            * np.sqrt(12)
-        )
-        rolling.to_csv(run_dir / "rolling_sharpe.csv", index=False, encoding="utf-8-sig")
-        print(f"Saved rolling Sharpe to {run_dir / 'rolling_sharpe.csv'}")
-
-        quintile_summary = results[["q1_ret", "q2_ret", "q3_ret", "q4_ret", "q5_ret"]].mean().to_frame("mean_return")
-        quintile_summary.to_csv(run_dir / "quintiles.csv", encoding="utf-8-sig")
-        print(f"Saved quintile summary to {run_dir / 'quintiles.csv'}")
-
-        if sector_rows:
-            sector_df = pd.DataFrame(sector_rows)
-            sector_df.to_csv(run_dir / "sector_attribution.csv", index=False, encoding="utf-8-sig")
-            print(f"Saved sector attribution to {run_dir / 'sector_attribution.csv'}")
-
-        # Save statistical significance report
-        s_save = _compute_core_stats(results)
-        sig = s_save.get("sig", {})
-        if sig:
-            sig_rows = [
-                {"metric": "OLS t-stat",          "value": sig.get("ols_tstat"),    "p_value": sig.get("ols_pval")},
-                {"metric": "Newey-West t-stat",    "value": sig.get("nw_tstat"),     "p_value": sig.get("nw_pval"),
-                 "note": f"lags={sig.get('nw_lags')}"},
-                {"metric": "Sharpe t-stat (Lo02)", "value": sig.get("sharpe_tstat"), "p_value": sig.get("sharpe_pval")},
-                {"metric": "IC t-stat",            "value": sig.get("ic_tstat"),     "p_value": sig.get("ic_pval"),
-                 "note": f"n={sig.get('ic_n')}"},
-                {"metric": "Bootstrap Sharpe CI lo","value": sig.get("sharpe_ci_lo"), "p_value": np.nan},
-                {"metric": "Bootstrap Sharpe CI hi","value": sig.get("sharpe_ci_hi"), "p_value": np.nan},
-                {"metric": "Binomial hit-rate p",  "value": sig.get("binom_n_pos"),  "p_value": sig.get("binom_pval"),
-                 "note": f"{sig.get('binom_n_pos')}/{sig.get('binom_n_tot')}"},
-                {"metric": "VERDICT",              "value": sig.get("verdict"),       "p_value": np.nan,
-                 "note": sig.get("verdict_note")},
-            ]
-            pd.DataFrame(sig_rows).to_csv(run_dir / "stat_significance.csv", index=False, encoding="utf-8-sig")
-            print(f"Saved stat significance to {run_dir / 'stat_significance.csv'}")
 
         if args.save_picks and pick_rows:
             picks_df = pd.DataFrame(pick_rows).sort_values(["date", "rank_pos"])
@@ -2152,8 +2106,7 @@ def run(args: argparse.Namespace) -> None:
             results if not isinstance(results["date"].iloc[0], str)
             else results.assign(date=pd.to_datetime(results["date"]))
         )
-        sector_df_dash = pd.read_csv(run_dir / "sector_attribution.csv") \
-            if (run_dir / "sector_attribution.csv").exists() else pd.DataFrame()
+        sector_df_dash = pd.DataFrame(sector_rows) if sector_rows else pd.DataFrame()
 
         results_dt = results.copy()
         if results_dt["date"].dtype == object:
@@ -2211,10 +2164,10 @@ def main() -> None:
     )
     parser.add_argument("--top-n", type=int, default=30, help="Portfolio size at each rebalance")
     parser.add_argument("--portfolio-size", type=int, default=100_000_000,
-                        help="Portfolio size in KRW for discrete share rounding (default: 100,000,000 = 1억)")
+                        help="Portfolio size in KRW for discrete share rounding (default: 100,000,000 = 100M KRW)")
     parser.add_argument("--train-years", type=int, default=5, help="Walk-forward training window in years")
     parser.add_argument("--min-market-cap", type=int, default=500_000_000_000, help="Minimum market cap filter")
-    parser.add_argument("--max-market-cap", type=int, default=None, help="Maximum market cap filter (e.g. 5000000000000 = 5조, targets SMID-cap universe)")
+    parser.add_argument("--max-market-cap", type=int, default=None, help="Maximum market cap filter (e.g. 5000000000000 = 5T KRW, targets SMID-cap universe)")
     parser.add_argument("--time-decay", type=float, default=0.2, help="Sample time-decay strength")
     parser.add_argument("--learning-rate", type=float, default=0.005, help="Model learning rate")
     parser.add_argument("--n-estimators", type=int, default=3000, help="Max boosting rounds")
@@ -2249,7 +2202,7 @@ def main() -> None:
     parser.add_argument("--exec-price", type=str, default="close", choices=["open", "close"],
                         help="Execution price basis when --exec-lag > 0 (default: close)")
     parser.add_argument("--min-daily-value", type=int, default=0,
-                        help="Test 5 (Liquidity): exclude stocks with daily trading value < N KRW (0=off, e.g. 10000000000 for 100억)")
+                        help="Test 5 (Liquidity): exclude stocks with daily trading value < N KRW (0=off, e.g. 10000000000 for 10B KRW)")
     parser.add_argument("--twap-days", type=int, default=0,
                         help="TWAP execution: spread buy/sell over N trading days. "
                              "entry=avg(close T+1..T+N), exit=avg(close T+H-N+1..T+H). "

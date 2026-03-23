@@ -1,4 +1,4 @@
-﻿date,test_year,stock_code,name,sector,closing_price,shares,invested_krw,매수가,매도가,매도날짜,market_cap,score,score_rank,rank_pos,forward_return_21d_lag1_close
+﻿date,test_year,stock_code,name,sector,closing_price,shares,invested_krw,buy_price,sell_price,sell_date,market_cap,score,score_rank,rank_pos,forward_return_21d_lag1_close
 20170102,2017,000700,유수홀딩스,"회사본부,지주회사및경영컨설팅서비스업",5730,1745.0,9998850.0,6047.0,6736.0,20170203,149219582760,0.5617002695027173,2.7440076440492556,1.0,0.11392274281471959
 20170102,2017,002795,아모레퍼시픽홀딩스우,UNMAPPED_SECTOR,50000,200.0,10000000.0,49885.0,53449.0,20170203,322188500000,0.5399299302045844,2.0829502288375656,2.0,0.07144136349451302
 20170102,2017,138690,엘아이에스,특수목적용기계제조업,9400,1063.0,9992200.0,26878.0,25318.0,20170203,118464712600,0.5485392356765871,2.061384368397,3.0,-0.0580197131499659

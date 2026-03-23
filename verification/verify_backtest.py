@@ -3,7 +3,7 @@
 Backtest Verification Tool — cross-checks picks.csv against FinanceDataReader.
 
 For every trade in picks.csv, fetches an independent adjusted-close price
-series from Naver Finance (수정주가) and recomputes the holding-period return.
+series from Naver Finance (adjusted price) and recomputes the holding-period return.
 Naver Finance prices are retroactively adjusted for splits/rights offerings,
 matching pykrx's methodology used in our ETL.
 
@@ -65,7 +65,7 @@ def _fetch(code: str, start_iso: str, end_iso: str, retries: int = 3) -> pd.Data
     """
     Fetch OHLC prices from FinanceDataReader (Naver Finance).
 
-    Naver Finance returns 수정주가 (retroactively adjusted prices) that match
+    Naver Finance returns adjusted price (retroactively adjusted prices) that match
     pykrx's adjustment methodology, unlike raw KRX prices which are unadjusted.
 
     Source priority: NAVER:{code} → bare code (fallback for delisted).
@@ -129,7 +129,7 @@ def _price_on(price_df: pd.DataFrame, iso_date: str, use: str = "close") -> floa
     """
     Return the price on iso_date (or the next available trading day within 10 days).
 
-    use='close' → closing price  (matches sell date stored in picks.csv 매도날짜)
+    use='close' → closing price  (matches sell date stored in picks.csv sell_date)
     use='open'  → opening price
     Falls back to close if open is unavailable.
     Returns NaN if no data found.
@@ -205,7 +205,7 @@ def verify_picks(
 
         # Date range for this stock across all its rebalances
         buy_dates  = group["date"].astype(str).tolist()
-        sell_dates = group["매도날짜"].dropna().astype(str).tolist() if "매도날짜" in group.columns else []
+        sell_dates = group["sell_date"].dropna().astype(str).tolist() if "sell_date" in group.columns else []
         all_dates  = [_to_iso(d) for d in buy_dates + sell_dates if str(d) not in ("nan", "NaT", "")]
         if not all_dates:
             continue
@@ -220,7 +220,7 @@ def verify_picks(
 
         for _, row in group.iterrows():
             buy_date_raw  = str(row["date"])
-            sell_date_raw = str(row.get("매도날짜", ""))
+            sell_date_raw = str(row.get("sell_date", ""))
             bt_return     = float(row[fwd_col]) if fwd_col and pd.notna(row.get(fwd_col)) else np.nan
 
             rec = {
@@ -229,8 +229,8 @@ def verify_picks(
                 "sector":         row.get("sector", ""),
                 "buy_date":       buy_date_raw,
                 "sell_date":      sell_date_raw if sell_date_raw not in ("nan", "NaT", "") else "",
-                "bt_buy_price":   row.get("매수가", np.nan),
-                "bt_sell_price":  row.get("매도가", np.nan),
+                "bt_buy_price":   row.get("buy_price", np.nan),
+                "bt_sell_price":  row.get("sell_price", np.nan),
                 "bt_return":      bt_return,
                 "fdr_buy_price":  np.nan,
                 "fdr_sell_price": np.nan,
@@ -260,7 +260,7 @@ def verify_picks(
                 continue
 
             # Buy: T+1 price using exec price type (close or open)
-            # Sell: price on 매도날짜 (already T+horizon+exec_lag in picks.csv)
+            # Sell: price on sell_date (already T+horizon+exec_lag in picks.csv)
             fdr_buy  = _next_price(price_df, _to_iso(buy_date_raw), use=price_type)
             fdr_sell = _price_on(price_df, sell_date_iso, use=price_type)
 
@@ -430,7 +430,7 @@ Examples
 
 Notes
 -----
-  • Returns are compared using Naver Finance 수정주가 (adjusted close),
+  • Returns are compared using Naver Finance adjusted price (adjusted close),
     which matches our pykrx ETL's retroactive adjustment methodology.
     Small differences (< 2%%) are still expected due to open-vs-close timing
     (backtest buys at lag1_open; verification uses Naver close).
@@ -478,7 +478,7 @@ Notes
     print(f"Loading  : {picks_path}")
     picks_df = pd.read_csv(
         picks_path,
-        dtype={"stock_code": str, "date": str, "매도날짜": str},
+        dtype={"stock_code": str, "date": str, "sell_date": str},
         low_memory=False,
     )
     print(f"  Rows   : {len(picks_df):,}")

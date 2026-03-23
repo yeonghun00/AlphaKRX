@@ -32,9 +32,17 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Backtest results (optional - remove if you want to track)
+# Standalone result files outside runs/
 backtest_*.csv
 screening_results_*.xlsx
+
+# Explicitly track all run outputs (csv, png, pkl, md)
+!runs/
+!runs/**/
+!runs/**/*.csv
+!runs/**/*.png
+!runs/**/*.pkl
+!runs/**/*.md
 
 # Progress files
 .etl_progress.json
