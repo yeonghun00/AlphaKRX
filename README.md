@@ -23,6 +23,35 @@
 
 ---
 
+## Tech Stack
+
+Python · LightGBM · SQLite · pandas · pykrx · Kiwoom REST API
+
+---
+
+## Where Alpha Comes From
+
+| Feature Group | Importance | Signal |
+|---|---|---|
+| Sector-relative low volatility | 33.5% | Stocks quieter than sector peers (vol, turnover z-scores) |
+| Quality / Profitability | 19.5% | ROE, gross profitability (GPA) |
+| Sector momentum | 12.0% | Relative sector strength and breadth |
+| Market regime | 11.7% | Regime-aware position sizing |
+| Academic momentum | 7.8% | MA crossovers, 52-week high proximity |
+| Distress avoidance | 7.0% | Liquidity decay, low-price traps |
+
+---
+
+## Bias Controls
+
+- **No look-ahead on financials** — IFRS data only used after 45/90-day publication lag (point-in-time)
+- **Walk-forward with 21-day embargo** — model never sees test-period data; purge gap between train and test windows
+- **Survivorship-bias-free** — delisted stocks included in universe up to their last trading date; pre-delisting returns recomputed from last traded price
+- **Execution lag test** — Sharpe holds at T+1 execution (close → next day), confirming alpha is not dependent on filling at the exact closing price
+- **Independent verification** — all trades cross-checked against Naver Finance adjusted prices via a separate script (`verification/verify_backtest.py`)
+
+---
+
 ## How It Works
 
 ```
