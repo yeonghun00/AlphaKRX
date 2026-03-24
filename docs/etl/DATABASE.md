@@ -1,127 +1,48 @@
-# Database Schema
+# Database Schema Overview
 
 SQLite database: `data/krx_stock_data.db`
 
----
+**18 tables** across 5 domains. See the linked files for full column-level detail.
 
-## `stocks` — Stock Master
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `stock_code` | TEXT PK | 6-digit KRX code (e.g. `005930`) |
-| `current_name` | TEXT | Latest company name |
-| `current_market_type` | TEXT | `kospi` or `kosdaq` |
-| `current_sector_type` | TEXT | KRX sector classification |
-| `shares_outstanding` | INTEGER | Current shares outstanding |
-| `is_active` | BOOLEAN | Whether the stock is still listed |
+| Domain | Tables | Doc |
+|--------|--------|-----|
+| Equities — Prices | `daily_prices`, `adj_daily_prices`, `stocks`, `stock_history` | [PRICES.md](PRICES.md) |
+| Equities — Financials | `financial_periods`, `financial_items_bs_cf`, `financial_items_pl` | [FINANCIALS.md](FINANCIALS.md) |
+| Equities — Universe | `delisted_stocks`, `index_constituents`, `index_category_mapping` | [UNIVERSE.md](UNIVERSE.md) |
+| Indices | `indices`, `index_daily_prices`, `index_history` | [INDICES.md](INDICES.md) |
+| Derivatives & Bonds | `deriv_indices`, `deriv_index_daily`, `bond_indices`, `bond_index_daily`, `govt_bonds`, `govt_bond_daily`, `govt_bond_history` | [DERIVATIVES_BONDS.md](DERIVATIVES_BONDS.md) |
 
 ---
 
-## `stock_history` — Name/Market Changes Over Time
+## Row Counts & Date Coverage (as of 2026-03)
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `stock_code` | TEXT FK | References `stocks` |
-| `effective_date` | TEXT | Date of this snapshot (YYYYMMDD) |
-| `name` | TEXT | Company name at that date |
-| `market_type` | TEXT | Market at that date |
-
----
-
-## `daily_prices` — OHLCV + Market Cap
-
-Primary key: `(stock_code, date)`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `stock_code` | TEXT FK | References `stocks` |
-| `date` | TEXT | Trading date (YYYYMMDD) |
-| `closing_price` | INTEGER | Close price (KRW) |
-| `opening_price` | INTEGER | Open price |
-| `high_price` | INTEGER | Day high |
-| `low_price` | INTEGER | Day low |
-| `volume` | INTEGER | Shares traded |
-| `value` | INTEGER | Value traded (KRW) |
-| `market_cap` | INTEGER | Market capitalization (KRW) |
-| `change` | INTEGER | Price change from prev close |
-| `change_rate` | REAL | % change |
+| Table | Rows | Date Range |
+|-------|------|------------|
+| `daily_prices` | 8,797,312 | 2011-01-04 → 2026-03-20 |
+| `adj_daily_prices` | 8,797,312 | 2011-01-04 → 2026-03-20 |
+| `index_constituents` | 2,400,889 | 2010-01-01 → 2026-03-01 |
+| `index_daily_prices` | 275,353 | 2010-01-04 → 2026-03-20 |
+| `financial_periods` | 158,094 | available 2015-05-16 → 2026-01-16 |
+| `financial_items_bs_cf` | 13,491,922 | — |
+| `financial_items_pl` | 3,871,357 | — |
+| `deriv_index_daily` | 418,617 | 2010-01-04 → 2026-03-20 |
+| `bond_index_daily` | 5,898 | 2010-02-15 → 2026-03-20 |
+| `govt_bond_daily` | 30,515 | 2010-01-04 → 2026-03-20 |
+| `delisted_stocks` | 1,720 | — |
+| `stocks` | 4,755 | — |
 
 ---
 
-## `index_constituents` — Monthly Index Membership Snapshots
+## Key Design Principles
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `date` | TEXT | Snapshot date (YYYY-MM-DD format) |
-| `stock_code` | TEXT | Member stock code |
-| `index_code` | TEXT | Index identifier (e.g. `KOSPI_코스피_200`, `KOSDAQ_코스닥_IT`) |
+**Point-in-time (PIT) safety for financials:**
+Financial data is never used before its public disclosure date. Each row in `financial_periods` has an `available_date` computed from the 45/90-day disclosure rule. The feature pipeline enforces this via `merge_asof(direction="backward")`.
 
-Used for two purposes:
-1. Counting how many indices a stock belongs to (`constituent_index_count` feature)
-2. Assigning each stock a sector based on its most specific (smallest) non-broad index
+**Backward-chained adjusted prices:**
+`adj_daily_prices` uses `change_rate` from `daily_prices` to compute a split/rights-adjusted price via log-space suffix products. Dividends are excluded. The anchor is the last known price for each stock (or delisting date).
 
----
+**Survivorship-bias control:**
+`delisted_stocks` tracks all delisted companies with delisting dates. The feature pipeline includes these stocks up to (but not including) their delisting date.
 
-## `delisted_stocks`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `stock_code` | TEXT UNIQUE | Delisted stock code |
-| `company_name` | TEXT | Company name |
-| `delisting_date` | DATE | When it was delisted (YYYY-MM-DD) |
-| `delisting_reason` | TEXT | Reason for delisting |
-
----
-
-## `financial_periods` — Statement Metadata
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | INTEGER PK | Auto-increment ID |
-| `stock_code` | TEXT | Company code |
-| `fiscal_date` | TEXT | Period end date (YYYY-MM-DD) |
-| `available_date` | TEXT | First date this data can be used (PIT-safe) |
-| `consolidation_type` | TEXT | `연결` (consolidated) or `별도` (separate) |
-| `fiscal_month` | INTEGER | Fiscal year-end month |
-| `report_type` | TEXT | Annual/quarterly indicator |
-
-`available_date` uses the **45/90-day disclosure rule**:
-- Q1/Q2/Q3: available ~45 days after fiscal period end
-- Q4 (annual): available ~90 days after fiscal period end
-
-Example (December fiscal year):
-
-| Quarter | Ends | Available |
-|---------|------|-----------|
-| Q1 | Mar 31 | May 16 |
-| Q2 | Jun 30 | Aug 16 |
-| Q3 | Sep 30 | Nov 15 |
-| Q4 | Dec 31 | Apr 1 (next year) |
-
----
-
-## `financial_items_bs_cf` — Balance Sheet + Cash Flow
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `period_id` | INTEGER FK | References `financial_periods.id` |
-| `item_code_normalized` | TEXT | Normalized IFRS code (e.g. `ifrs-full_Equity`) |
-| `item_name` | TEXT | Human-readable item name |
-| `amount_current` | REAL | Current period amount |
-| `amount_prev` | REAL | Previous period amount |
-
-Key items used by the model: `ifrs-full_Equity`, `ifrs-full_Assets`, `ifrs-full_CashFlowsFromUsedInOperatingActivities`
-
----
-
-## `financial_items_pl` — Income Statement
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `period_id` | INTEGER FK | References `financial_periods.id` |
-| `item_code_normalized` | TEXT | Normalized IFRS code |
-| `item_name` | TEXT | Human-readable item name |
-| `amount_current_ytd` | REAL | Year-to-date amount |
-| `amount_current_qtr` | REAL | Current quarter amount |
-
-Key items used by the model: `ifrs-full_ProfitLoss` (net income), `ifrs-full_GrossProfit`
+**Index membership as PIT feature:**
+`index_constituents` stores monthly snapshots of which stocks belong to which KRX indices. Used to compute `constituent_index_count` and sector labels.

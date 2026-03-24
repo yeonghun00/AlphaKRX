@@ -551,8 +551,9 @@ class IndexETLPipeline:
         cursor.execute(f"SELECT 1 FROM {check_table} WHERE date = ? LIMIT 1", (date,))
         return cursor.fetchone() is not None
 
-    def get_existing_dates(self, start_date: str, end_date: str, table: str = 'index_daily_prices') -> Set[str]:
-        """Get dates with existing data."""
+    def get_existing_dates(self, start_date: str, end_date: str, table: str = 'index_daily_prices',
+                           index_code: str = None) -> Set[str]:
+        """Get dates with existing data, optionally filtered by a specific index_code."""
         table_map = {
             'market_indices': 'index_daily_prices',
             'bond_indices': 'bond_index_daily',
@@ -562,10 +563,16 @@ class IndexETLPipeline:
         check_table = table_map.get(table, table)
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute(f"""
-            SELECT DISTINCT date FROM {check_table}
-            WHERE date >= ? AND date <= ?
-        """, (start_date, end_date))
+        if index_code:
+            cursor.execute(f"""
+                SELECT DISTINCT date FROM {check_table}
+                WHERE date >= ? AND date <= ? AND index_code = ?
+            """, (start_date, end_date, index_code))
+        else:
+            cursor.execute(f"""
+                SELECT DISTINCT date FROM {check_table}
+                WHERE date >= ? AND date <= ?
+            """, (start_date, end_date))
         return {row[0] for row in cursor.fetchall()}
 
     def get_stats(self) -> Dict:

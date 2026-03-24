@@ -95,7 +95,7 @@ Rebuilds the entire table each run (idempotent). The model uses this to cut off 
 
 ## Pipeline 4: Financial Statements (`etl/financial_etl.py`)
 
-**Source**: Raw ZIP files in `data/raw_financial/` (downloaded from DART/KRX)
+**Source**: Raw ZIP files in `data/raw_financial/` (manually downloaded from DART)
 **Tables updated**: `financial_periods`, `financial_items_bs_cf`, `financial_items_pl`
 
 ```bash
@@ -107,6 +107,26 @@ python3 etl/financial_etl.py data/krx_stock_data.db data/raw_financial
 - Item codes normalized from `ifrs_X` → `ifrs-full_X` format
 - Only consolidated (`연결`) statements used by the model
 - `available_date` enforces PIT safety — financial data never used before public disclosure
+
+### Downloading Financial ZIP Files from DART
+
+Financial statement data must be downloaded manually from the DART bulk download page:
+
+**URL**: https://opendart.fss.or.kr/disclosureinfo/fnltt/dwld/main.do
+
+**Steps:**
+1. Go to the URL above (no login required)
+2. Select report type:
+   - `사업보고서` (Annual) — for full-year data
+   - `분기보고서` (Quarterly) / `반기보고서` (Semi-annual) — for intra-year updates
+3. Select the year
+4. Download all three file types: **BS** (balance sheet), **PL** (income statement), **CF** (cash flow)
+5. Place all downloaded ZIP files into `data/raw_financial/`
+6. Run the ETL: `python3 etl/financial_etl.py data/krx_stock_data.db data/raw_financial`
+
+**For a full backfill (2010–present):** download annual ZIPs for each year 2010–present — approximately 45 files (15 years × 3 types). The ETL tracks which ZIPs have been processed via `.processed_files` so re-running is safe.
+
+**Update frequency:** quarterly — download new ZIPs after each earnings season (typically April, August, November for Q1/H1/Q3; April for annual).
 
 ---
 

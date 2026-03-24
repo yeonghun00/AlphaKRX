@@ -48,6 +48,18 @@ KIWOOM_MOCK=true
 
 ## Step 1: Load Data
 
+### 1a. Download financial statement ZIPs (manual, one-time)
+
+Financial data must be downloaded manually from DART before running the ETL:
+
+1. Go to: **https://opendart.fss.or.kr/disclosureinfo/fnltt/dwld/main.do**
+2. Download annual (`사업보고서`) ZIP files for each year 2010–present, all three types: BS, PL, CF
+3. Place all ZIPs into `data/raw_financial/`
+
+This is a one-time setup (~45 files). After that, add new quarterly ZIPs as they're released. See [etl/ETL.md](etl/ETL.md) for details.
+
+### 1b. Run the ETL pipelines
+
 First-time full backfill (takes hours):
 
 ```bash
@@ -96,12 +108,10 @@ Output files in `runs/myrun/`:
 
 | File | What to look at |
 |------|----------------|
-| `report.png` | Equity curve vs benchmark, rolling Sharpe, drawdown |
-| `results.csv` | Per-rebalance returns, alpha, IC, turnover |
-| `picks.csv` | Every stock pick with score and forward return |
-| `stat_significance.csv` | Sharpe t-stat, Newey-West, bootstrap CI |
-| `quintiles.csv` | Q1–Q5 average returns (monotonicity check) |
-| `rolling_sharpe.csv` | Rolling Sharpe over time |
+| `report.png` | Equity curve vs benchmark, rolling Sharpe, sector attribution, IC |
+| `results.csv` | Per-rebalance returns, alpha, IC, turnover, quintile returns |
+| `picks.csv` | Every stock pick with entry/exit price and forward return |
+| `picks.png` | Holdings heatmap and sector allocation over time |
 
 **Key metrics to check:**
 

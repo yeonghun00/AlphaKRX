@@ -128,12 +128,26 @@ def backfill_index_data(
     logger.info(f"Backfilling {len(dates)} trading dates from {start_date} to {end_date}")
     logger.info(f"Index types: {', '.join(index_types)}")
 
-    # Get existing dates if not forcing
+    # Get existing dates if not forcing.
+    # Use a type-specific check so that, e.g., dates with KOSPI data but missing KOSDAQ
+    # or VKOSPI are not silently skipped.
+    _SENTINEL_INDEX = {
+        'kospi_index':   ('market_indices',      'KOSPI_코스피_200'),
+        'kosdaq_index':  ('market_indices',       'KOSDAQ_코스닥'),
+        'bond_index':    ('bond_indices',         None),
+        'govt_bond':     ('government_bonds',     None),
+        'derivatives':   ('derivatives_indices',  'DERIV_옵션지수_코스피_200_변동성지수'),
+    }
     existing_dates: Set[str] = set()
     if not force:
-        existing_dates = pipeline.get_existing_dates(start_date, end_date, 'market_indices')
+        if len(index_types) == 1 and index_types[0] in _SENTINEL_INDEX:
+            check_table, sentinel_code = _SENTINEL_INDEX[index_types[0]]
+        else:
+            check_table, sentinel_code = 'market_indices', None
+        existing_dates = pipeline.get_existing_dates(start_date, end_date, check_table, sentinel_code)
         dates_to_process = [d for d in dates if d not in existing_dates]
-        logger.info(f"Skipping {len(existing_dates)} dates with existing data")
+        logger.info(f"Skipping {len(existing_dates)} dates with existing data (checked {check_table}"
+                    + (f"/{sentinel_code}" if sentinel_code else "") + ")")
     else:
         dates_to_process = dates
         logger.info("Force mode: processing all dates")

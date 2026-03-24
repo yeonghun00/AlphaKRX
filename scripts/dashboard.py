@@ -41,7 +41,8 @@ def resolve_run_dir(run_arg: str) -> Path:
 
 def load_results(run_dir: Path) -> pd.DataFrame:
     path = run_dir / "results.csv"
-    df   = pd.read_csv(path, parse_dates=["date"])
+    df   = pd.read_csv(path)
+    df["date"] = pd.to_datetime(df["date"].astype(str), format="%Y%m%d")
     return df.sort_values("date").reset_index(drop=True)
 
 
@@ -127,17 +128,17 @@ def fig_cumret(results: pd.DataFrame) -> go.Figure:
         customdata=alpha,
     ))
     fig.update_layout(
-        title="📈 누적 수익률 — Portfolio vs Benchmark",
+        title="Cumulative Return — Portfolio vs Benchmark",
         xaxis=dict(
-            title="리밸런싱 날짜",
+            title="Rebalance Date",
             rangeslider=dict(visible=True, thickness=0.07),
             rangeselector=dict(bgcolor="#21262d", buttons=[
                 dict(count=1, label="2023", step="year", stepmode="todate"),
                 dict(count=2, label="~2024", step="year", stepmode="todate"),
-                dict(step="all", label="전체"),
+                dict(step="all", label="All"),
             ]),
         ),
-        yaxis_title="누적 수익률 (%)",
+        yaxis_title="Cumulative Return (%)",
         hovermode="x unified",
         template=DARK, height=420,
         legend=dict(x=0.01, y=0.97, bgcolor="rgba(0,0,0,0.4)"),
@@ -150,7 +151,7 @@ def fig_3d_picks(picks: pd.DataFrame) -> go.Figure:
     """3D scatter: Rebalance Date × Portfolio Rank × Realized Return."""
     if picks.empty:
         fig = go.Figure()
-        fig.add_annotation(text="top_picks 데이터 없음<br>results CSV의 top_picks 컬럼에서 자동 파싱됩니다",
+        fig.add_annotation(text="No top_picks data<br>Auto-parsed from top_picks column in results CSV",
                            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
                            font=dict(size=14, color="#8b949e"))
         fig.update_layout(title="🎯 3D Picks Scatter", template=DARK, height=560)
@@ -180,7 +181,7 @@ def fig_3d_picks(picks: pd.DataFrame) -> go.Figure:
                 [1.0, "#2dc653"],
             ],
             cmin=-25, cmid=0, cmax=25,
-            colorbar=dict(title="수익률 %", x=1.02, len=0.8),
+            colorbar=dict(title="Return %", x=1.02, len=0.8),
             opacity=0.90,
             line=dict(width=0.5, color="rgba(255,255,255,0.2)"),
         ),
@@ -199,21 +200,21 @@ def fig_3d_picks(picks: pd.DataFrame) -> go.Figure:
     ))
 
     fig.update_layout(
-        title="🎯 3D Picks — 날짜 × 순위 × 수익률  (드래그: 회전 | 스크롤: 줌)",
+        title="3D Picks — Date × Rank × Return  (drag: rotate | scroll: zoom)",
         scene=dict(
             bgcolor="#0d1117",
             xaxis=dict(
-                title="리밸런싱 날짜",
+                title="Rebalance Date",
                 tickvals=list(range(len(date_labels))),
                 ticktext=[d[5:] for d in date_labels],   # MM-DD
                 gridcolor="#30363d", zerolinecolor="#30363d",
             ),
             yaxis=dict(
-                title="포트폴리오 순위",
+                title="Portfolio Rank",
                 gridcolor="#30363d", zerolinecolor="#30363d",
             ),
             zaxis=dict(
-                title="수익률 (%)",
+                title="Return (%)",
                 gridcolor="#30363d", zerolinecolor="#30363d",
             ),
             camera=dict(eye=dict(x=2.0, y=-1.6, z=0.8)),
@@ -229,7 +230,7 @@ def fig_3d_quintile(results: pd.DataFrame) -> go.Figure:
     q_cols = [c for c in ["q1_ret", "q2_ret", "q3_ret", "q4_ret", "q5_ret"] if c in results.columns]
     if len(q_cols) < 3:
         fig = go.Figure()
-        fig.add_annotation(text="q1_ret ~ q5_ret 컬럼이 없습니다",
+        fig.add_annotation(text="q1_ret ~ q5_ret columns not found",
                            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
                            font=dict(size=14, color="#8b949e"))
         fig.update_layout(title="📊 3D Quintile Surface", template=DARK, height=560)
@@ -251,9 +252,9 @@ def fig_3d_quintile(results: pd.DataFrame) -> go.Figure:
             [1.0,  "#2dc653"],
         ],
         cmin=-20, cmid=0, cmax=20,
-        colorbar=dict(title="수익률 %", x=1.02, len=0.8),
+        colorbar=dict(title="Return %", x=1.02, len=0.8),
         opacity=0.92,
-        hovertemplate="날짜: %{x}<br>Q%{y}<br>수익률: %{z:.1f}%<extra></extra>",
+        hovertemplate="Date: %{x}<br>Q%{y}<br>Return: %{z:.1f}%<extra></extra>",
     ))
     fig.update_traces(
         contours_z=dict(show=True, usecolormap=True, highlightcolor="rgba(255,255,255,0.4)",
@@ -264,11 +265,11 @@ def fig_3d_quintile(results: pd.DataFrame) -> go.Figure:
 
     tick_step = max(1, len(dates) // 6)
     fig.update_layout(
-        title="📊 3D Quintile Surface — 날짜별 신호 단조성  (드래그: 회전 | 스크롤: 줌)",
+        title="3D Quintile Surface — Signal Monotonicity Over Time  (drag: rotate | scroll: zoom)",
         scene=dict(
             bgcolor="#0d1117",
             xaxis=dict(
-                title="리밸런싱",
+                title="Rebalance",
                 tickvals=list(range(0, len(dates), tick_step)),
                 ticktext=[dates[i][2:] for i in range(0, len(dates), tick_step)],
                 gridcolor="#30363d",
@@ -279,7 +280,7 @@ def fig_3d_quintile(results: pd.DataFrame) -> go.Figure:
                 ticktext=[f"Q{i}" for i in yi],
                 gridcolor="#30363d",
             ),
-            zaxis=dict(title="수익률 (%)", gridcolor="#30363d"),
+            zaxis=dict(title="Return (%)", gridcolor="#30363d"),
             camera=dict(eye=dict(x=1.6, y=-2.2, z=1.1)),
         ),
         template=DARK, height=580,
@@ -307,7 +308,7 @@ def fig_3d_risk_return(results: pd.DataFrame, universe_df: pd.DataFrame) -> go.F
         zi    = results.loc[mask, "ic_spearman"].values if has_ic else np.zeros(mask.sum())
         ds    = results.loc[mask, "date"].dt.strftime("%Y-%m-%d").tolist()
         alpha_vals = yi - xi
-        txt = [f"<b>{d}</b><br>벤치마크: {bx:+.1f}%<br>포트폴리오: {by:+.1f}%<br>알파: {a:+.1f}%<br>IC: {ic:.3f}"
+        txt = [f"<b>{d}</b><br>Benchmark: {bx:+.1f}%<br>Portfolio: {by:+.1f}%<br>Alpha: {a:+.1f}%<br>IC: {ic:.3f}"
                for d, bx, by, a, ic in zip(ds, xi, yi, alpha_vals, zi)]
         fig.add_trace(go.Scatter3d(
             x=xi, y=yi, z=zi,
@@ -336,11 +337,11 @@ def fig_3d_risk_return(results: pd.DataFrame, universe_df: pd.DataFrame) -> go.F
     ))
 
     fig.update_layout(
-        title="🔬 3D Alpha Decomposition — 시장수익률 × 포트수익률 × IC  (드래그: 회전)",
+        title="3D Alpha Decomposition — Market Return × Portfolio Return × IC  (drag: rotate)",
         scene=dict(
             bgcolor="#0d1117",
-            xaxis=dict(title="시장 수익률 (%)", gridcolor="#30363d"),
-            yaxis=dict(title="포트폴리오 수익률 (%)", gridcolor="#30363d"),
+            xaxis=dict(title="Market Return (%)", gridcolor="#30363d"),
+            yaxis=dict(title="Portfolio Return (%)", gridcolor="#30363d"),
             zaxis=dict(title="IC (Spearman)", gridcolor="#30363d"),
             camera=dict(eye=dict(x=1.8, y=-1.8, z=1.0)),
         ),
@@ -359,11 +360,11 @@ def fig_return_dist(results: pd.DataFrame) -> go.Figure:
         sub = results[results["year"] == yr] if yr is not None else results
         ret = sub["portfolio_return"] * 100
         fig.add_trace(go.Histogram(
-            x=ret, name=str(yr) if yr else "전체",
+            x=ret, name=str(yr) if yr else "All",
             nbinsx=12, opacity=0.75,
             marker_color=palette.get(yr, C_PORT),
             histnorm="probability",
-            hovertemplate=f"{yr}<br>%{{x:.1f}}%<br>비율: %{{y:.2f}}<extra></extra>",
+            hovertemplate=f"{yr}<br>%{{x:.1f}}%<br>Frequency: %{{y:.2f}}<extra></extra>",
         ))
         # Mean line
         fig.add_vline(
@@ -375,8 +376,8 @@ def fig_return_dist(results: pd.DataFrame) -> go.Figure:
         )
     fig.add_vline(x=0, line_color="white", line_dash="dash", line_width=1)
     fig.update_layout(
-        title="📉 수익률 분포 — Return Distribution by Year",
-        xaxis_title="리밸런싱 수익률 (%)", yaxis_title="비율",
+        title="Return Distribution by Year",
+        xaxis_title="Rebalance Return (%)", yaxis_title="Frequency",
         barmode="overlay", template=DARK, height=360,
         legend=dict(bgcolor="rgba(0,0,0,0.4)"),
     )
@@ -386,7 +387,7 @@ def fig_return_dist(results: pd.DataFrame) -> go.Figure:
 def fig_ic_bar(results: pd.DataFrame) -> go.Figure:
     if "ic_spearman" not in results.columns:
         fig = go.Figure()
-        fig.update_layout(title="IC — 없음", template=DARK, height=320)
+        fig.update_layout(title="IC — No Data", template=DARK, height=320)
         return fig
     xs     = results["date"].dt.strftime("%Y-%m-%d").tolist()
     ic     = results["ic_spearman"]
@@ -403,8 +404,8 @@ def fig_ic_bar(results: pd.DataFrame) -> go.Figure:
                   annotation_position="top right")
     fig.add_hline(y=0, line_color=C_BENCH, line_width=1)
     fig.update_layout(
-        title="🎯 IC (Spearman) — 리밸런싱별",
-        xaxis_title="날짜", yaxis_title="IC",
+        title="IC (Spearman) per Rebalance",
+        xaxis_title="Date", yaxis_title="IC",
         template=DARK, height=320,
     )
     return fig
@@ -428,7 +429,7 @@ def fig_annual_sharpe(results: pd.DataFrame) -> go.Figure:
     tr   = (1 + ret).prod() - 1
     ann  = (1 + tr) ** (1 / n_yr) - 1
     sh   = ann / vol if vol > 0 else 0
-    rows.append({"Year": "전체", "Sharpe": sh, "Return": tr * 100})
+    rows.append({"Year": "Overall", "Sharpe": sh, "Return": tr * 100})
 
     df     = pd.DataFrame(rows)
     colors = [C_GREEN if v >= 1 else C_YEL if v >= 0 else C_RED for v in df["Sharpe"]]
@@ -439,11 +440,11 @@ def fig_annual_sharpe(results: pd.DataFrame) -> go.Figure:
         hovertemplate="%{x}<br>Sharpe: %{y:.2f}<extra></extra>",
     ))
     fig.add_hline(y=1, line_color=C_GREEN, line_dash="dot",
-                  annotation_text="Sharpe=1 (목표)", annotation_position="top right",
+                  annotation_text="Sharpe=1 (target)", annotation_position="top right",
                   annotation_font_color=C_GREEN)
     fig.update_layout(
-        title="⚡ 연도별 Sharpe Ratio",
-        xaxis_title="연도", yaxis_title="Sharpe",
+        title="Annual Sharpe Ratio",
+        xaxis_title="Year", yaxis_title="Sharpe",
         template=DARK, height=320,
         yaxis=dict(range=[min(0, df["Sharpe"].min() - 0.3), df["Sharpe"].max() + 0.5]),
     )
@@ -467,7 +468,7 @@ def fig_drawdown(results: pd.DataFrame) -> go.Figure:
                   annotation_font_color=C_RED, annotation_position="bottom right")
     fig.update_layout(
         title="📉 Drawdown",
-        xaxis_title="날짜", yaxis_title="Drawdown (%)",
+        xaxis_title="Date", yaxis_title="Drawdown (%)",
         template=DARK, height=280,
     )
     return fig
@@ -494,7 +495,7 @@ def fig_turnover(results: pd.DataFrame) -> go.Figure:
         ))
     fig.update_layout(
         title="🔄 Turnover & Transaction Cost",
-        xaxis_title="날짜",
+        xaxis_title="Date",
         yaxis=dict(title="Turnover (%)"),
         yaxis2=dict(title="Tx Cost (%)", overlaying="y", side="right", showgrid=False),
         barmode="group", template=DARK, height=300,
@@ -505,10 +506,10 @@ def fig_turnover(results: pd.DataFrame) -> go.Figure:
 def fig_sector_bar(sector_df: pd.DataFrame) -> go.Figure:
     if sector_df.empty or "sector" not in sector_df.columns:
         fig = go.Figure()
-        fig.add_annotation(text="sector_attribution CSV 없음",
+        fig.add_annotation(text="No sector_attribution CSV found",
                            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
                            font=dict(size=13, color="#8b949e"))
-        fig.update_layout(title="🏭 섹터 귀인", template=DARK, height=380)
+        fig.update_layout(title="Sector Attribution", template=DARK, height=380)
         return fig
     agg    = sector_df.groupby("sector")["contribution"].sum().sort_values()
     colors = [C_RED if v < 0 else C_GREEN for v in agg.values]
@@ -516,145 +517,13 @@ def fig_sector_bar(sector_df: pd.DataFrame) -> go.Figure:
         x=agg.values, y=agg.index,
         orientation="h", marker_color=colors,
         text=[f"{v:.2f}" for v in agg.values], textposition="outside",
-        hovertemplate="%{y}<br>기여도: %{x:.3f}<extra></extra>",
+        hovertemplate="%{y}<br>Contribution: %{x:.3f}<extra></extra>",
     ))
     fig.update_layout(
-        title="🏭 섹터 귀인 — Cumulative Sector Attribution",
-        xaxis_title="누적 기여도",
+        title="Sector Attribution — Cumulative Contribution",
+        xaxis_title="Cumulative Contribution",
         template=DARK, height=420,
         margin=dict(l=160),
-    )
-    return fig
-
-
-def fig_marketcap_3d(universe_df: pd.DataFrame) -> go.Figure:
-    """3D surface: Date × MarketCap tier × Stock count — shows universe composition over time."""
-    if universe_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="--db 경로 지정 필요 (DB 쿼리 결과 없음)",
-                           xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
-                           font=dict(size=13, color="#8b949e"))
-        fig.update_layout(title="🏢 시가총액 3D 분포", template=DARK, height=500)
-        return fig
-
-    dates  = sorted(universe_df["date"].unique())
-    # Log-spaced market cap bins
-    edges   = np.logspace(np.log10(1e10), np.log10(5e13), 13)   # 100억 ~ 50조, 12 bins
-    labels  = []
-    for lo, hi in zip(edges[:-1], edges[1:]):
-        if hi < 1e12:
-            labels.append(f"{lo/1e8:.0f}억~{hi/1e8:.0f}억")
-        else:
-            labels.append(f"{lo/1e12:.1f}조~{hi/1e12:.1f}조")
-
-    z_count = []   # (n_dates, n_bins)
-    for d in dates:
-        day = universe_df[universe_df["date"] == d]["market_cap"].values
-        counts, _ = np.histogram(day, bins=edges)
-        z_count.append(counts.tolist())
-
-    z_arr = np.array(z_count, dtype=float)   # (n_dates, n_bins)
-
-    fig = go.Figure(go.Surface(
-        z=z_arr.T,   # (n_bins, n_dates) — bins on Y, dates on X
-        x=list(range(len(dates))),
-        y=list(range(len(labels))),
-        colorscale="Viridis",
-        colorbar=dict(title="종목 수", x=1.02),
-        opacity=0.92,
-        hovertemplate="날짜 #%{x}<br>시총 구간 #%{y}<br>종목 수: %{z}<extra></extra>",
-    ))
-    fig.update_traces(
-        contours_z=dict(show=True, usecolormap=True, highlightcolor="white", project_z=True)
-    )
-    tick_step = max(1, len(dates) // 6)
-    fig.update_layout(
-        title="🏢 3D 시가총액 분포 — 날짜 × 시총 구간 × 종목 수  (드래그: 회전)",
-        scene=dict(
-            bgcolor="#0d1117",
-            xaxis=dict(
-                title="리밸런싱 날짜",
-                tickvals=list(range(0, len(dates), tick_step)),
-                ticktext=[str(dates[i])[:8] for i in range(0, len(dates), tick_step)],
-                gridcolor="#30363d",
-            ),
-            yaxis=dict(
-                title="시가총액 구간",
-                tickvals=list(range(0, len(labels), 2)),
-                ticktext=[labels[i] for i in range(0, len(labels), 2)],
-                gridcolor="#30363d",
-            ),
-            zaxis=dict(title="종목 수", gridcolor="#30363d"),
-            camera=dict(eye=dict(x=1.8, y=-2.0, z=1.2)),
-        ),
-        template=DARK, height=560,
-        margin=dict(t=50, b=10),
-    )
-    return fig
-
-
-def fig_volume_box(universe_df: pd.DataFrame) -> go.Figure:
-    """Box plot of daily trading value (거래대금) per rebalance date."""
-    if universe_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="--db 경로 지정 필요",
-                           xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
-                           font=dict(size=13, color="#8b949e"))
-        fig.update_layout(title="💹 거래대금 분포", template=DARK, height=380)
-        return fig
-
-    dates = sorted(universe_df["date"].unique())
-    n     = max(len(dates), 1)
-    fig   = go.Figure()
-    for i, d in enumerate(dates):
-        day     = universe_df[universe_df["date"] == d]
-        val_log = np.log10(day["value"].clip(lower=1))
-        color   = f"hsl({int(270 + i * 90 / n)},70%,55%)"
-        fig.add_trace(go.Box(
-            y=val_log, name=str(d)[:8],
-            boxpoints="outliers",
-            marker=dict(color=color, size=3, opacity=0.5),
-            line_color=color, fillcolor=color.replace("55%", "25%"),
-            hovertemplate=f"<b>{d}</b><br>log₁₀(거래대금): %{{y:.2f}}<extra></extra>",
-        ))
-    tickvals = [np.log10(v) for v in [1e7, 5e7, 1e8, 5e8, 1e9, 5e9, 1e10, 1e11]]
-    ticktext = ["1천만", "5천만", "1억", "5억", "10억", "50억", "100억", "1천억"]
-    fig.update_layout(
-        title="💹 거래대금 분포 — Daily Trading Value by Rebalance Date",
-        yaxis=dict(title="거래대금 (로그 KRW)", tickvals=tickvals, ticktext=ticktext),
-        xaxis_title="리밸런싱 날짜",
-        template=DARK, height=420,
-    )
-    return fig
-
-
-def fig_marketcap_box(universe_df: pd.DataFrame) -> go.Figure:
-    """Box plot of market cap per rebalance date."""
-    if universe_df.empty:
-        fig = go.Figure()
-        fig.update_layout(title="🏢 시가총액 분포 (Box) — DB 없음", template=DARK, height=380)
-        return fig
-    dates = sorted(universe_df["date"].unique())
-    n     = max(len(dates), 1)
-    fig   = go.Figure()
-    for i, d in enumerate(dates):
-        day    = universe_df[universe_df["date"] == d]
-        mc_log = np.log10(day["market_cap"].clip(lower=1))
-        color  = f"hsl({int(200 + i * 80 / n)},70%,55%)"
-        fig.add_trace(go.Box(
-            y=mc_log, name=str(d)[:8],
-            boxpoints="outliers",
-            marker=dict(color=color, size=3, opacity=0.5),
-            line_color=color, fillcolor=color.replace("55%", "25%"),
-            hovertemplate=f"<b>{d}</b><br>log₁₀(시가총액): %{{y:.2f}}<extra></extra>",
-        ))
-    tickvals = [np.log10(v) for v in [1e10, 5e10, 1e11, 5e11, 1e12, 5e12, 1e13]]
-    ticktext = ["100억", "500억", "1천억", "5천억", "1조", "5조", "10조"]
-    fig.update_layout(
-        title="🏢 시가총액 분포 (Box) — Market Cap by Rebalance Date",
-        yaxis=dict(title="시가총액 (로그 KRW)", tickvals=tickvals, ticktext=ticktext),
-        xaxis_title="리밸런싱 날짜",
-        template=DARK, height=420,
     )
     return fig
 
@@ -683,15 +552,12 @@ LAYOUT = [
     ("3d_picks",      True),
     ("3d_quintile",   True),
     ("3d_alpha",      True),
-    ("3d_mc",         True),
     ("return_dist",   False),
     ("ic",            False),
     ("annual_sharpe", False),
     ("drawdown",      False),
     ("turnover",      False),
     ("sector",        False),
-    ("mc_box",        False),
-    ("vol_box",       False),
 ]
 
 
@@ -735,7 +601,7 @@ def main() -> None:
     ap.add_argument("--output",         default="",
                     help="Output HTML path (default: runs/<name>/dashboard.html)")
     ap.add_argument("--min-market-cap", type=int, default=100_000_000_000,
-                    help="Universe floor for DB query (default 1000억)")
+                    help="Universe floor for DB query (default 100B KRW)")
     args = ap.parse_args()
 
     if not args.run:
@@ -762,15 +628,12 @@ def main() -> None:
         "3d_picks":      fig_3d_picks(picks_df),
         "3d_quintile":   fig_3d_quintile(results),
         "3d_alpha":      fig_3d_risk_return(results, universe_df),
-        "3d_mc":         fig_marketcap_3d(universe_df),
         "return_dist":   fig_return_dist(results),
         "ic":            fig_ic_bar(results),
         "annual_sharpe": fig_annual_sharpe(results),
         "drawdown":      fig_drawdown(results),
         "turnover":      fig_turnover(results),
         "sector":        fig_sector_bar(sector_df),
-        "mc_box":        fig_marketcap_box(universe_df),
-        "vol_box":       fig_volume_box(universe_df),
     }
 
     html = build_html(figs, title=run_dir.name)

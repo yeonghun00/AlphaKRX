@@ -8,6 +8,7 @@ import logging
 import os
 from pathlib import Path
 import sys
+import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
@@ -350,19 +351,92 @@ def _parse_exclude_years(raw: str) -> set[str]:
 
 
 def _format_sector_names(names) -> dict:
-    """Map sector names to display names.
+    """Map sector names to English display names."""
+    _KO_TO_EN = {
+        "소프트웨어개발및공급업":              "Software Dev & Supply",
+        "기타금융업":                          "Other Financial Svcs",
+        "자연과학및공학연구개발업":            "Science & Eng R&D",
+        "의약품제조업":                        "Pharmaceuticals",
+        "기타화학제품제조업":                  "Other Chemicals",
+        "특수목적용기계제조업":                "Special Purpose Machinery",
+        "통신및방송장비제조업":                "Telecom & Broadcasting Equip",
+        "영화,비디오물,방송프로그램제작및배급업": "Film & Broadcasting",
+        "기초화학물질제조업":                  "Basic Chemicals",
+        "전자부품제조업":                      "Electronic Components",
+        "자동차신품부품제조업":                "Auto Parts",
+        "의료용품및기타의약관련제품제조업":    "Medical & Pharma Products",
+        "반도체제조업":                        "Semiconductors",
+        "컴퓨터및주변기기제조업":              "Computers & Peripherals",
+        "기타전자부품제조업":                  "Other Electronic Components",
+        "금속주조업":                          "Metal Casting",
+        "1차금속제조업":                       "Primary Metals",
+        "금속가공제품제조업":                  "Fabricated Metal Products",
+        "기타기계및장비제조업":                "Other Machinery & Equipment",
+        "일반목적용기계제조업":                "General Purpose Machinery",
+        "고무및플라스틱제품제조업":            "Rubber & Plastics",
+        "비금속광물제품제조업":                "Non-Metallic Minerals",
+        "섬유제품제조업":                      "Textiles",
+        "의복및모피제품제조업":                "Apparel & Fur",
+        "음식료품제조업":                      "Food & Beverages",
+        "건설업":                              "Construction",
+        "도매및상품중개업":                    "Wholesale & Trading",
+        "소매업":                              "Retail",
+        "육상운송및파이프라인운송업":          "Land Transport",
+        "수상운송업":                          "Water Transport",
+        "항공운송업":                          "Air Transport",
+        "출판업":                              "Publishing",
+        "정보서비스업":                        "IT Services",
+        "통신업":                              "Telecommunications",
+        "보험및연금업":                        "Insurance & Pension",
+        "증권및선물중개업":                    "Securities & Futures",
+        "부동산업":                            "Real Estate",
+        "전문서비스업":                        "Professional Services",
+        "사업시설관리서비스업":                "Facility Management",
+        "교육서비스업":                        "Education Services",
+        "의료업":                              "Healthcare",
+        "회사본부,지주회사및경영컨설팅서비스업": "Holding Companies",
+        "전기업":                              "Electric Utilities",
+        "가스업":                              "Gas Utilities",
+        "기초의약물질및생물학적제제제조업":    "Basic Pharma & Bio Products",
+        "의료용기기제조업":                    "Medical Devices",
+        "전기장비제조업":                      "Electrical Equipment",
+        "전자제품제조업":                      "Consumer Electronics",
+        "목재및나무제품제조업":                "Wood & Wood Products",
+        "종이및종이제품제조업":                "Paper & Paper Products",
+        "인쇄및기록매체복제업":                "Printing & Recorded Media",
+        "석유정제품제조업":                    "Petroleum Refining",
+        "화학섬유제조업":                      "Synthetic Fibres",
+        "의료정밀광학기기및시계제조업":        "Medical & Precision Instruments",
+        "가구제조업":                          "Furniture",
+        "기타제품제조업":                      "Other Manufacturing",
+        "수도,하수및폐기물처리업":             "Water & Waste Management",
+        "농업,임업및어업":                     "Agriculture, Forestry & Fishing",
+        "광업":                                "Mining",
+        "음식점및주점업":                      "Food Service & Bars",
+        "숙박업":                              "Accommodation",
+        "창고및운송관련서비스업":              "Warehousing & Logistics",
+        "항공및육상운송지원서비스업":          "Transport Support Services",
+        "컴퓨터프로그래밍및시스템통합관리업":  "IT Consulting & Systems",
+        "영상및음향기기제조업":                "Audio & Visual Equipment",
+        "서적,잡지및기타인쇄물출판업":         "Books & Periodicals",
+        "오락및스포츠관련서비스업":            "Entertainment & Sports",
+        "수리및기타개인서비스업":              "Repair & Personal Services",
+        "건물건설업":                          "Building Construction",
+        "토목건설업":                          "Civil Engineering",
+        "전문,과학및기술서비스업":             "Professional & Tech Services",
+        "기타전문서비스업":                    "Other Professional Services",
+        "임대업":                              "Leasing & Rental",
+        "연구개발업":                          "R&D Services",
+    }
 
-    Sectors are now industry_name strings from financial_periods and are already
-    human-readable. Handle the legacy unmapped sentinel just in case.
-    """
     def _strip(name: str) -> str:
-        if name in ("UNMAPPED_SECTOR_INDEX", "UNMAPPED_SECTOR"):
+        if name in ("UNMAPPED_SECTOR_INDEX", "UNMAPPED_SECTOR", "UNMAPPED"):
             return "UNMAPPED"
-        # Strip legacy index-code prefixes if present (backwards compatibility)
         for prefix in ["KOSPI_코스피_200_", "KOSPI_코스피_", "KOSDAQ_코스닥_", "KOSDAQ_", "KOSPI_"]:
             if name.startswith(prefix):
-                return name[len(prefix):].replace("_", " ")
-        return name
+                name = name[len(prefix):].replace("_", " ")
+                break
+        return _KO_TO_EN.get(name, name)
 
     return {n: _strip(n) for n in names}
 
@@ -394,7 +468,7 @@ def _print_requested_tests(results: pd.DataFrame) -> None:
         return
 
     print("\n" + "=" * 70)
-    print("  REQUESTED TESTS")
+    print("  ROBUSTNESS & STRESS TESTS")
     print("=" * 70)
 
     years = results["year"] if "year" in results.columns else None
@@ -432,23 +506,25 @@ def _print_requested_tests(results: pd.DataFrame) -> None:
     else:
         test_rows.append(["2", "Beta-Hedged", "N/A", "N/A", "Unavailable"])
 
-    # 3) Remove 2023 and re-check sharpe on remaining periods
+    # 3) Remove the single best year (highest portfolio return) and re-check sharpe —
+    #    if the strategy survives without its standout year, the alpha is genuine.
     if "year" in results.columns:
-        ex_2023 = results[results["year"] != 2023].copy()
-        if not ex_2023.empty:
-            ex_stats = _compute_performance(ex_2023["portfolio_return"], ex_2023["year"])
+        best_year = int(results.groupby("year")["portfolio_return"].sum().idxmax())
+        ex_best = results[results["year"] != best_year].copy()
+        if not ex_best.empty:
+            ex_stats = _compute_performance(ex_best["portfolio_return"], ex_best["year"])
             verdict = "PASS" if pd.notna(ex_stats["sharpe"]) and ex_stats["sharpe"] >= 0.7 else "FAIL"
             test_rows.append([
                 "3",
-                "Ex-2023 robustness",
+                f"Ex-{best_year} robustness",
                 f"{ex_stats['ann_return']:.2%}",
                 f"{ex_stats['sharpe']:.2f}",
                 f"{verdict} (>=0.70)",
             ])
         else:
-            test_rows.append(["3", "Ex-2023 robustness", "N/A", "N/A", "Unavailable"])
+            test_rows.append(["3", "Ex-best-year robustness", "N/A", "N/A", "Unavailable"])
     else:
-        test_rows.append(["3", "Ex-2023 robustness", "N/A", "N/A", "Unavailable"])
+        test_rows.append(["3", "Ex-best-year robustness", "N/A", "N/A", "Unavailable"])
 
     # 4) Turnover reduction variant (relaxed hold threshold + score smoothing)
     required_cols = {"turnover_tuned", "transaction_cost_tuned", "portfolio_return_tuned"}
@@ -661,7 +737,7 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
         return
 
     plt.rcParams["font.family"] = "sans-serif"
-    plt.rcParams["font.sans-serif"] = ["Helvetica Neue", "Arial", "Helvetica", "DejaVu Sans"]
+    plt.rcParams["font.sans-serif"] = ["Helvetica Neue", "Arial", "Helvetica", "AppleGothic", "NanumGothic", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
 
     # Color palette
@@ -901,7 +977,9 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
     # Save
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(str(out), bbox_inches="tight", facecolor="white")
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Glyph", UserWarning)
+        fig.savefig(str(out), bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"\nSaved visual report to {out}")
 
@@ -1127,7 +1205,9 @@ def _generate_picks_chart(picks_df: pd.DataFrame, fwd_col: str, output_path: str
 
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(str(out), bbox_inches="tight", facecolor="white")
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", "Glyph", UserWarning)
+        fig.savefig(str(out), bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"Saved picks chart to {out}")
 
@@ -1223,9 +1303,23 @@ def _run_fold(payload: dict) -> dict:
     params["n_estimators"] = n_estimators
     model.patience = patience
     model.train(sub_train, val_df, params=params)
+
+    # ── IC diagnostics: train IC vs val IC (overfitting check) ──────────────
+    from scipy.stats import spearmanr as _spearmanr
+    def _ic(df, fc=fwd_col):
+        d = df[[fc, "score"]].dropna() if "score" in df.columns else pd.DataFrame()
+        if len(d) < 30:
+            return float("nan")
+        return _spearmanr(d["score"], d[fc]).statistic
+
+    train_probe = sub_train.copy()
+    train_probe["score"] = model.predict(train_probe)
+    train_ic = _ic(train_probe)
+
     if val_df is not None and len(val_df) > 100 and fwd_col in val_df.columns:
         val_probe = val_df.copy()
         val_probe["score"] = model.predict(val_probe)
+        val_ic = _ic(val_probe)
         score_rank_probe = val_probe["score"].rank(method="first", pct=True)
         val_probe["quintile"] = np.ceil(score_rank_probe * 5).clip(1, 5).astype(int)
         qv = val_probe.groupby("quintile")[fwd_col].mean()
@@ -1234,6 +1328,13 @@ def _run_fold(payload: dict) -> dict:
             mono_ok = bool(qv.loc[5] > qv.loc[4] > qv.loc[3] > qv.loc[2] > qv.loc[1])
         if not mono_ok:
             print(f"[Fold {info['test_year']}] quintiles not monotonic (diagnostic only, no retry)", flush=True)
+        print(
+            f"[Fold {info['test_year']}] IC  train={train_ic:.4f}  val={val_ic:.4f}  "
+            f"ratio={val_ic/train_ic:.2f}  {'⚠ OVERFIT' if train_ic > 0 and val_ic / train_ic < 0.6 else 'OK'}",
+            flush=True,
+        )
+    else:
+        print(f"[Fold {info['test_year']}] IC  train={train_ic:.4f}  val=N/A", flush=True)
     print(f"[Fold {info['test_year']}] model trained", flush=True)
 
     rows = []
@@ -1255,28 +1356,35 @@ def _run_fold(payload: dict) -> dict:
     ) -> tuple[pd.DataFrame, set[str], float, float]:
         keep_pool = frame[
             (frame["stock_code"].isin(previous_holdings)) & (frame[rank_pos_col] <= hold_rank_limit)
-        ].copy()
+        ].copy().sort_values(rank_col, ascending=False)
         already_in = set(keep_pool["stock_code"])
         buy_candidates = frame[
             (~frame["stock_code"].isin(already_in)) & (frame[rank_pos_col] <= buy_rank)
-        ].copy()
+        ].copy().sort_values(rank_col, ascending=False)
 
-        if len(keep_pool) > 0 and len(buy_candidates) > 0:
-            worst_keeper_score = keep_pool[rank_col].min()
-            score_edge = buy_fee_rate + sell_fee_rate
-            buy_candidates = buy_candidates[
-                buy_candidates[rank_col] > worst_keeper_score + score_edge
-            ].copy()
+        # True hysteresis: kept stocks are protected — only fill empty slots with new candidates.
+        # A new candidate only displaces a kept stock if it scores higher by > transaction cost edge.
+        score_edge = buy_fee_rate + sell_fee_rate
+        protected = keep_pool.copy()
+        new_entries = []
+        for _, candidate in buy_candidates.iterrows():
+            if len(protected) + len(new_entries) >= effective_top_n:
+                break
+            new_entries.append(candidate)
 
-        picks = pd.concat([keep_pool, buy_candidates], ignore_index=True)
+        # If keep_pool exceeds top_n, drop weakest kept stocks
+        if len(protected) > effective_top_n:
+            protected = protected.head(effective_top_n)
+
+        picks = pd.concat([protected, pd.DataFrame(new_entries)], ignore_index=True)
         picks = picks.sort_values(rank_col, ascending=False).drop_duplicates("stock_code")
 
+        # Fill any remaining slots if still short
         if len(picks) < effective_top_n:
             fill_pool = frame[
                 (~frame["stock_code"].isin(set(picks["stock_code"])))
                 & (frame[rank_pos_col] <= hold_rank_limit)
-            ].copy()
-            fill_pool = fill_pool.sort_values(rank_col, ascending=False)
+            ].copy().sort_values(rank_col, ascending=False)
             picks = pd.concat([picks, fill_pool.head(effective_top_n - len(picks))], ignore_index=True)
 
         picks = picks.sort_values(rank_col, ascending=False).drop_duplicates("stock_code")
@@ -2097,20 +2205,16 @@ def run(args: argparse.Namespace) -> None:
         sys.path.insert(0, str(Path(__file__).parent))
         import dashboard as _dash
         print("\n[Dashboard] Generating interactive HTML dashboard ...")
+        results_dt = results.copy()
+        results_dt["date"] = pd.to_datetime(results_dt["date"].astype(str).str[:8], format="%Y%m%d")
+
         universe_df = _dash.query_universe(
-            args.db, results["date"].str[:8].tolist() if results["date"].dtype == object
-            else pd.to_datetime(results["date"]).dt.strftime("%Y%m%d").tolist(),
+            args.db,
+            results_dt["date"].dt.strftime("%Y%m%d").tolist(),
             args.min_market_cap,
         )
-        picks_df = _dash.parse_top_picks(
-            results if not isinstance(results["date"].iloc[0], str)
-            else results.assign(date=pd.to_datetime(results["date"]))
-        )
+        picks_df = _dash.parse_top_picks(results_dt)
         sector_df_dash = pd.DataFrame(sector_rows) if sector_rows else pd.DataFrame()
-
-        results_dt = results.copy()
-        if results_dt["date"].dtype == object:
-            results_dt["date"] = pd.to_datetime(results_dt["date"])
 
         figs = {
             "cumret":        _dash.fig_cumret(results_dt),

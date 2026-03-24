@@ -19,15 +19,22 @@ class LGBMRanker(BaseRanker):
         "metric": "huber",
         "alpha": 0.9,
         "boosting_type": "gbdt",
-        "num_leaves": 7,
+        # ── Tree structure ────────────────────────────────────────────────────
+        "num_leaves": 7,            # kept shallow — 2^3=8 max with depth=3
         "max_depth": 3,
-        "learning_rate": 0.05,
-        "feature_fraction": 0.5,
-        "bagging_fraction": 0.8,
+        # ── Regularisation (primary overfitting fix) ──────────────────────────
+        "lambda_l1": 0.1,           # L1: pushes small weights to zero (feature sparsity)
+        "lambda_l2": 1.0,           # L2: shrinks all leaf weights — biggest overfit reducer
+        "min_gain_to_split": 0.01,  # discard splits that add < 0.01 gain (prunes noisy splits)
+        "min_data_in_leaf": 1500,   # 750 → 1500: each leaf needs more evidence to form
+        # ── Stochastic subsampling (decorrelates trees) ───────────────────────
+        "feature_fraction": 0.4,    # 0.5 → 0.4: sample fewer features per tree
+        "bagging_fraction": 0.7,    # 0.8 → 0.7: sample fewer rows per tree
         "bagging_freq": 5,
-        "min_data_in_leaf": 750,
+        # ── Learning ─────────────────────────────────────────────────────────
+        "learning_rate": 0.05,      # overridden to 0.005 by run_backtest.py
         "verbose": -1,
-        "n_estimators": 1000,
+        "n_estimators": 1000,       # overridden to 3000 by run_backtest.py
         "n_jobs": -1,
         "seed": 42,
     }

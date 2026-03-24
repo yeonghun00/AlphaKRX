@@ -1,0 +1,12 @@
+{
+  "start_date": "20100101",
+  "end_date": "20261231",
+  "last_processed_date": "20260720",
+  "processed_count": 2010,
+  "total_records": {
+    "kosdaq_index": 62259
+  },
+  "index_types": [
+    "kosdaq_index"
+  ]
+}
