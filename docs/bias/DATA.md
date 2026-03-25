@@ -187,3 +187,33 @@ if "value" in day_df.columns:
 ```
 
 Halted stocks are **included in training** (learning the failure pattern) but **excluded from portfolio construction** — mirroring live conditions where halted stocks cannot be purchased.
+
+---
+
+### Mechanism 5: Live Trading — Stuck Position Protection
+
+**Location**: `scripts/run_live.py` → `build_orders()`
+
+```
+Problem: a stock already held in the live portfolio gets halted mid-period.
+         The rebalance logic would generate a sell order → order fails or
+         executes at a bad price when the halt unexpectedly lifts.
+
+Solution: before generating sell orders, check value > 0 for every current
+          holding. Halted positions are skipped and carried forward.
+```
+
+```python
+tradeable = set(universe_df[universe_df["value"] > 0]["stock_code"].tolist())
+for code in list(sell_codes):
+    if code not in tradeable:
+        stuck_holdings.add(code)   # skip sell, log warning
+        sell_codes = sell_codes - {code}
+
+# Persist stuck positions across rebalance cycles
+new_holdings = list(set(new_picks.head(top_n)["stock_code"]) | stuck_holdings)
+```
+
+Stuck holdings are **preserved in `live/state.json`** and re-evaluated on every subsequent rebalance. Once trading resumes (`value > 0`), the stock is sold normally on the next cycle.
+
+**Known limitation:** Fix B uses `last_price` (last available price in the dataset) for long-duration halts (> 42 trading days). If the halt extends to the end of the dataset, forward return ≈ 0% in training rather than the eventual post-resumption crash. In practice this affects very few rows — stocks halted this long almost always end in delisting (captured by Fix A) or are filtered by the liquidity floor before selection.

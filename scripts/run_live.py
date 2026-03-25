@@ -406,16 +406,29 @@ def build_orders(
     current_holdings: set[str],
     top_n: int,
     portfolio_krw: int,
-) -> tuple[list[dict], list[dict]]:
+    universe_df: pd.DataFrame | None = None,
+) -> tuple[list[dict], list[dict], set[str]]:
     """
     Compare current holdings vs new picks to generate buy/sell lists.
 
-    Returns (sell_orders, buy_orders).
+    Returns (sell_orders, buy_orders, stuck_holdings).
     Each order: {stock_code, name, quantity, price}
+    stuck_holdings: codes that are halted today — sell skipped, kept in portfolio.
     """
     new_codes  = set(new_picks.head(top_n)["stock_code"].tolist())
     sell_codes = current_holdings - new_codes
     buy_codes  = new_codes - current_holdings
+
+    # Identify halted holdings — value == 0 or absent from today's universe.
+    # Cannot place sell orders on halted stocks; they stay in the portfolio.
+    stuck_holdings: set[str] = set()
+    if universe_df is not None and "stock_code" in universe_df.columns and "value" in universe_df.columns:
+        tradeable = set(universe_df[universe_df["value"] > 0]["stock_code"].tolist())
+        for code in list(sell_codes):
+            if code not in tradeable:
+                stuck_holdings.add(code)
+                sell_codes = sell_codes - {code}
+                print(f"  [HALT] {code} — trading suspended today. Sell skipped, position held.")
 
     per_stock_krw = portfolio_krw // max(len(new_codes), 1)
 
@@ -440,7 +453,7 @@ def build_orders(
             "price":      0,    # market order
         })
 
-    return sell_orders, buy_orders
+    return sell_orders, buy_orders, stuck_holdings
 
 
 def print_order_summary(
@@ -633,13 +646,18 @@ Examples
         current_holdings = get_current_holdings(run_dir)
         print(f"  [State] {len(current_holdings)} holdings loaded from picks.csv (first run)")
 
-    # Build orders
-    sell_orders, buy_orders = build_orders(
+    # Build orders — pass full pred_df (before value filter) for halt detection
+    sell_orders, buy_orders, stuck_holdings = build_orders(
         new_picks=new_picks,
         current_holdings=current_holdings,
         top_n=top_n,
         portfolio_krw=args.portfolio,
+        universe_df=pred_df,
     )
+    if stuck_holdings:
+        print(f"\n  ⚠️  HALTED POSITIONS ({len(stuck_holdings)}): {', '.join(sorted(stuck_holdings))}")
+        print(f"  These stocks are suspended today. Sell orders skipped.")
+        print(f"  They remain in your portfolio until trading resumes.")
 
     print_order_summary(schedule, current_holdings, new_picks, sell_orders, buy_orders, top_n)
 
@@ -677,14 +695,15 @@ Examples
     for o in buy_orders:
         client.order_buy(o["stock_code"], o["quantity"], price=0)
 
-    # Persist state
-    new_holdings = list(set(new_picks.head(top_n)["stock_code"].tolist()))
+    # Persist state — include stuck (halted) holdings so they aren't lost next cycle
+    new_holdings = list(set(new_picks.head(top_n)["stock_code"].tolist()) | stuck_holdings)
     save_order_log(schedule["next_exec"], sell_orders, buy_orders, new_holdings)
     save_state({
         "last_executed_rebal": schedule["next_rebal"],
         "current_holdings":    new_holdings,
         "run_name":            run_name,
         "last_updated":        datetime.now().isoformat(),
+        "stuck_holdings":      list(stuck_holdings) if stuck_holdings else [],
     })
 
     print("\n  Done.")

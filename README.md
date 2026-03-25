@@ -21,7 +21,7 @@
 
 *Statistical significance: OLS t-stat 2.89 (p=0.006), Newey-West HAC t-stat 2.66 (p=0.011), IC t-stat 6.61 (p=0.000), Bootstrap Sharpe 95% CI [0.39, 1.81] — all pass at 5%; OLS/IC pass at 1%.*
 
-**Config:** `--start 20100101 --min-market-cap 100B KRW --horizon 42d --top-n 25 --train-years 3 --buy-fee 0.05% --sell-fee 0.25% --no-cash-out`
+**Config:** `--start 20100101 --min-market-cap 200B KRW --horizon 42d --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05% --sell-fee 0.25% --no-cash-out`
 
 ### Annual Breakdown
 
@@ -113,10 +113,10 @@ python3 scripts/run_etl.py update --markets kospi,kosdaq --workers 4
 ```bash
 python3 scripts/run_backtest.py \
   --start 20100101 \
-  --horizon 42 --top-n 25 \
-  --train-years 3 \
-  --min-market-cap 100000000000 \
+  --min-market-cap 200000000000 \
+  --horizon 42 --top-n 50 \
   --buy-rank 28 --hold-rank 90 \
+  --train-years 3 \
   --buy-fee 0.05 --sell-fee 0.25 \
   --no-cash-out
 ```

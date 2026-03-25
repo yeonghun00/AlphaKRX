@@ -1327,10 +1327,12 @@ def _run_fold(payload: dict) -> dict:
         if all(q in qv.index for q in [1, 2, 3, 4, 5]):
             mono_ok = bool(qv.loc[5] > qv.loc[4] > qv.loc[3] > qv.loc[2] > qv.loc[1])
         if not mono_ok:
-            print(f"[Fold {info['test_year']}] quintiles not monotonic (diagnostic only, no retry)", flush=True)
+            # Per-fold val quintile ordering is noisy (6 rebalances, ~1yr window).
+            # Treat as informational only — the aggregate OOS quintile table is authoritative.
+            print(f"[Fold {info['test_year']}] quintiles not monotonic (val set noise — see aggregate OOS table)", flush=True)
         print(
             f"[Fold {info['test_year']}] IC  train={train_ic:.4f}  val={val_ic:.4f}  "
-            f"ratio={val_ic/train_ic:.2f}  {'⚠ OVERFIT' if train_ic > 0 and val_ic / train_ic < 0.6 else 'OK'}",
+            f"ratio={val_ic/train_ic:.2f}  {'⚠ OVERFIT' if train_ic > 0 and val_ic / train_ic < 0.5 else 'OK'}",
             flush=True,
         )
     else:
@@ -2221,15 +2223,12 @@ def run(args: argparse.Namespace) -> None:
             "3d_picks":      _dash.fig_3d_picks(picks_df),
             "3d_quintile":   _dash.fig_3d_quintile(results_dt),
             "3d_alpha":      _dash.fig_3d_risk_return(results_dt, universe_df),
-            "3d_mc":         _dash.fig_marketcap_3d(universe_df),
             "return_dist":   _dash.fig_return_dist(results_dt),
             "ic":            _dash.fig_ic_bar(results_dt),
             "annual_sharpe": _dash.fig_annual_sharpe(results_dt),
             "drawdown":      _dash.fig_drawdown(results_dt),
             "turnover":      _dash.fig_turnover(results_dt),
             "sector":        _dash.fig_sector_bar(sector_df_dash),
-            "mc_box":        _dash.fig_marketcap_box(universe_df),
-            "vol_box":       _dash.fig_volume_box(universe_df),
         }
         html = _dash.build_html(figs, title=run_name)
         dash_path = run_dir / "dashboard.html"

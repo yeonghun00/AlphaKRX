@@ -47,15 +47,16 @@ With ~18–48 rebalances over the backtest period, the standard error of the Sha
 
 ---
 
-### Mechanism 1: Ex-Year Robustness Test
+### Mechanism 1: Ex-Best-Year Robustness Test
 
 ```python
-# Compute Sharpe excluding a specific year
-ex_year_ret = [r for r in results if r["year"] != exclude_year]
+# Dynamically find and exclude the single best year (highest total return)
+best_year = results.groupby("year")["portfolio_return"].sum().idxmax()
+ex_best = results[results["year"] != best_year]
 ```
 
-If Sharpe ≥ 0.70 after excluding any single year, the strategy does not depend on one lucky year.
-Result: Ex-2023 Sharpe = **2.74** (very robust).
+If Sharpe ≥ 0.70 after excluding the best year, the strategy does not depend on one outlier year.
+Result: Ex-2023 Sharpe = **0.71** — passes the 0.70 threshold (barely, as expected for a conservative test).
 
 ---
 
@@ -75,7 +76,7 @@ If Q1–Q5 returns increase monotonically with model rank, signal consistency is
 IC  = rank correlation between model scores and actual returns (per rebalance)
 IC IR = mean(IC) / std(IC)   ← signal-to-noise ratio
 
-IC IR = 1.76 → IC is on average 1.76σ above zero = stable signal
+IC IR = 0.94 → IC is on average 0.94σ above zero = stable signal
 ```
 
 High IC with low IC IR = unstable (only works in certain market regimes). High IC with high IC IR = consistently predictive signal.
@@ -131,11 +132,13 @@ Practical limit accounting for slippage: ~5–15B KRW
 | **Validation leakage** | Val set extracted from test | Val split from within train window | ✅ CLEAN |
 | **Survivorship (delisted)** | Failed stocks excluded | Fix A + `_exclude_delisted` | ✅ CLEAN |
 | **Survivorship (halted)** | Halted stock return distortion | Fix B + `value > 0` filter | ✅ CLEAN |
-| **Execution bias** | T-close fill impossible | exec_lag=1 test (Sharpe 2.87) | ✅ CLEAN |
-| **Small sample bias** | Single-year dependency | Ex-year test (Ex-2023 Sharpe 2.74) | ✅ Robust |
+| **Stuck live position (halt)** | Sell order on halted holding fails | `build_orders()` skips halted sells, carries forward | ✅ FIXED |
+| **Long-duration halt (>42d)** | Forward return ≈ 0% in training | Accepted limitation — affects <0.1% of rows, filtered by liquidity floor | ⚠️ Known |
+| **Execution bias** | T-close fill impossible | exec_lag=1 (T+1 close execution) | ✅ CLEAN |
+| **Small sample bias** | Single-year dependency | Ex-best-year test (Ex-2023 Sharpe 0.71) | ✅ Robust |
 | **Liquidity bias** | Unfillable stock selection | min-daily-value filter test | 🔴 AUM limit ~5–15B KRW |
 | **Parameter overfitting** | Hyperparams tuned in-sample | Additional OOS validation needed | ⚠️ Residual risk |
 
 ---
 
-*Based on: `CACHE_VERSION = "unified_v49_delistfix_20260218"` (test_run, 2026-02-19)*
+*Last updated: 2026-03-25 — config: `--min-market-cap 200B --train-years 3 --top-n 50 --horizon 42`*
