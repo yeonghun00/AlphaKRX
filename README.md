@@ -39,6 +39,8 @@
 
 *\*2025 alpha is negative because KOSPI 200 returned ~90% in 2025 (K-defense/AI boom). Portfolio still returned +47.6% in absolute terms.*
 
+*Annual figures are based on rebalancing windows (~6 per year), not strict calendar years. The last rebalancing window of each year extends ~43 trading days into the following year, so annual alpha figures are for directional intuition only — do not sum or compound them. Total return (+368.6%) and overall alpha (+180.1%) are computed from the full equity curve and are the authoritative figures.*
+
 ### Robustness Tests
 
 | Test | Sharpe | Status |
