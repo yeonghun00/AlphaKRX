@@ -19,6 +19,8 @@
 | **IC / IC IR** | 0.065 / 0.94 | — |
 | **Hit Rate** | 55.1% (27/49 periods) | — |
 
+![Backtest Report](runs/run/report.png)
+
 *Statistical significance: OLS t-stat 2.89 (p=0.006), Newey-West HAC t-stat 2.66 (p=0.011), IC t-stat 6.61 (p=0.000), Bootstrap Sharpe 95% CI [0.39, 1.81] — all pass at 5%; OLS/IC pass at 1%.*
 
 **Config:** `--start 20100101 --min-market-cap 200B KRW --horizon 42d --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05% --sell-fee 0.25% --no-cash-out`
