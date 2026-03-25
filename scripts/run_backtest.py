@@ -436,7 +436,11 @@ def _format_sector_names(names) -> dict:
             if name.startswith(prefix):
                 name = name[len(prefix):].replace("_", " ")
                 break
-        return _KO_TO_EN.get(name, name)
+        en = _KO_TO_EN.get(name, None)
+        if en is not None:
+            return en
+        # Unknown Korean name — use a safe ASCII fallback to avoid broken glyphs in matplotlib
+        return f"[{abs(hash(name)) % 9000 + 1000}]"
 
     return {n: _strip(n) for n in names}
 
