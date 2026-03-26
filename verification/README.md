@@ -153,17 +153,30 @@ This tool verifies **data accuracy and return calculation logic** only. Out of s
 
 ---
 
-## myrun Verification Results (as of 2026-02-24)
+## Verification Results (as of 2026-03-25)
 
 ```
 Source: Naver Finance adjusted prices
 Tolerance: ±5%
-Buy price basis: T+1 open  /  Sell price basis: sell date open
+Buy price basis: close  (inferred from forward_return_42d_lag1_close)
 
-Match rate  : 633/638 = 99.2%
-Mean  |Δ|   : 0.118%
-Median |Δ|  : 0.013%
-Max   |Δ|   : 22.656%  (SNK 950180, corporate action adjustment factor difference)
+Total trade-records             : 2,450
+  Fully verified (both returns)  : 2,352
+    ✅  Match  (|Δ| ≤ 5%)        : 2,344  (99.7%)
+    ⚠️   Discrepancy (|Δ| > 5%)   : 8
+  🔴  Delisted / unavailable      : 0
+  ❓  No sell date                : 98  (open positions at backtest tail)
+
+Return accuracy (fully verified trades):
+  Mean   |Δ|  : 0.067%
+  Median |Δ|  : 0.014%
+  Max    |Δ|  : 18.494%  (000670 영풍, corporate action adjustment factor difference)
+
+Discrepancy analysis (8 outliers):
+  - No consistent direction of bias (diffs go both ways — not a systematic error)
+  - All 8 cases explained by corporate actions (rights offerings, splits, tender offers)
+    or multi-rebalance hold periods with compounding adjustment factor differences
+  - Notable: 000670 영풍 involved in 고려아연 corporate battle (late 2024)
 
 Conclusion: Backtest calculation logic is correct. Remaining errors are due to
             rights offering adjustment factor differences between data providers

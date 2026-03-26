@@ -74,13 +74,13 @@ The model trains on the highest-priority target that has sufficient coverage.
 ## Walk-Forward Validation
 
 ```
-Fold 1:  Train [2010–2012]  [21-day embargo]  Test [2013]
-Fold 2:  Train [2011–2013]  [21-day embargo]  Test [2014]
+Fold 1:  Train [2010–2012]  [43-day embargo]  Test [2013]
+Fold 2:  Train [2011–2013]  [43-day embargo]  Test [2014]
 ...
 ```
 
 - Last year of the training window is held out for early stopping validation (no data from test set)
-- 21-day embargo (`--embargo-days`) removes samples that overlap with the test period
+- 43-day embargo (auto-set to `horizon + exec_lag` at runtime) removes samples that overlap with the test period
 - Each fold trains an independent model; final evaluation is out-of-sample across all folds
 
 See [../bias/DATA.md](../bias/DATA.md) for full look-ahead and leakage controls.

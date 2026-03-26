@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -193,31 +194,26 @@ def verify_picks(
     price_type = exec_price if exec_price in ("open", "close") else _exec_price_from_col(fwd_col)
     print(f"  Exec price: {price_type}  (inferred from fwd_col: {fwd_col})", flush=True)
 
-    records = []
     stocks = picks_df["stock_code"].unique()
     n_total = len(stocks)
+    completed = [0]
 
-    for idx, code in enumerate(stocks, 1):
-        print(f"\r  [{idx:>4}/{n_total}] {code:<10}", end="", flush=True)
-        time.sleep(request_delay)
-
+    def _process_stock(code: str) -> list[dict]:
         group = picks_df[picks_df["stock_code"] == code].copy()
 
-        # Date range for this stock across all its rebalances
         buy_dates  = group["date"].astype(str).tolist()
         sell_dates = group["sell_date"].dropna().astype(str).tolist() if "sell_date" in group.columns else []
         all_dates  = [_to_iso(d) for d in buy_dates + sell_dates if str(d) not in ("nan", "NaT", "")]
         if not all_dates:
-            continue
+            return []
 
         start_iso = min(all_dates)
         end_iso   = _add_buffer(max(all_dates), days=15)
 
         price_df = _fetch(code, start_iso, end_iso)
-
-        # Detect delisted: fdr returned no data at all
         is_unavailable = price_df.empty
 
+        rows = []
         for _, row in group.iterrows():
             buy_date_raw  = str(row["date"])
             sell_date_raw = str(row.get("sell_date", ""))
@@ -242,25 +238,22 @@ def verify_picks(
 
             if is_unavailable:
                 rec["status"] = "delisted_or_unavailable"
-                records.append(rec)
+                rows.append(rec)
                 continue
 
             sell_date_iso = _to_iso(sell_date_raw) if sell_date_raw not in ("nan", "NaT", "") else ""
             if not sell_date_iso:
                 rec["status"] = "no_sell_date"
-                records.append(rec)
+                rows.append(rec)
                 continue
 
-            # Detect mid-holding delisting: sell_date past last available fdr date
             last_fdr_date = price_df.index.max()
             sell_ts = pd.Timestamp(sell_date_iso)
             if sell_ts > last_fdr_date + timedelta(days=30):
                 rec["status"] = "delisted_or_unavailable"
-                records.append(rec)
+                rows.append(rec)
                 continue
 
-            # Buy: T+1 price using exec price type (close or open)
-            # Sell: price on sell_date (already T+horizon+exec_lag in picks.csv)
             fdr_buy  = _next_price(price_df, _to_iso(buy_date_raw), use=price_type)
             fdr_sell = _price_on(price_df, sell_date_iso, use=price_type)
 
@@ -281,7 +274,18 @@ def verify_picks(
             else:
                 rec["status"] = "fdr_price_missing"
 
-            records.append(rec)
+            rows.append(rec)
+        return rows
+
+    records = []
+    workers = min(10, n_total)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {executor.submit(_process_stock, code): code for code in stocks}
+        for future in as_completed(futures):
+            completed[0] += 1
+            code = futures[future]
+            print(f"\r  [{completed[0]:>4}/{n_total}] {code:<10}", end="", flush=True)
+            records.extend(future.result())
 
     print()  # newline after progress line
     return pd.DataFrame(records)
@@ -496,8 +500,7 @@ Notes
 
     print(f"  Tolerance: ±{args.tolerance:.1%}")
     print(f"\nFetching prices from FinanceDataReader...")
-    print(f"  (~{picks_df['stock_code'].nunique()} API calls, ETA "
-          f"~{picks_df['stock_code'].nunique() * args.delay / 60:.1f} min)\n")
+    print(f"  (~{picks_df['stock_code'].nunique()} API calls, 10 workers in parallel)\n")
 
     # ── Verify ──────────────────────────────────────────────────────────────
     verified = verify_picks(

@@ -73,12 +73,13 @@ Market forward return is used only for computing the **beta-adjusted residual ta
 ```
 Time →
 
-[Train 2019–2022]  [21-day Embargo]  [Test 2023]
+[Train 2019–2022]  [43-day Embargo]  [Test 2023]
                    ↑
            Data in this window discarded
+           (auto-set to horizon 42d + exec_lag 1d)
 
-[Train 2020–2023]  [21-day Embargo]  [Test 2024]
-[Train 2021–2024]  [21-day Embargo]  [Test 2025]
+[Train 2020–2023]  [43-day Embargo]  [Test 2024]
+[Train 2021–2024]  [43-day Embargo]  [Test 2025]
 ```
 
 ```python
