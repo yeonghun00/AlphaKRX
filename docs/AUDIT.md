@@ -140,7 +140,7 @@ The model has real signal (IC 0.11, monotonic quintiles, statistically significa
 | Fairer benchmark | `--benchmark universe` | Alpha should shrink significantly |
 | KOSDAQ benchmark | `--benchmark kosdaq150` | Down capture should go positive |
 | Raw win/loss ratio | `portfolio_return` column in results.csv | If raw <1.2, the 1.50 is benchmark-relative illusion |
-| Exclude bio/pharma | Not yet supported — add `--exclude-sector` | Does alpha survive without bio? |
+| Exclude bio/pharma | 🔴 Planned — add `--exclude-sector` | Does alpha survive without bio? |
 | Sector cap | `--max-sector-weight 0.25` (once implemented) | Returns drop, but are they more honest? |
 
 ---
@@ -1032,6 +1032,8 @@ This cross-checks each pick's entry/exit price against Naver Finance adjusted pr
 ---
 
 ## Quick Reference — Most Important Checks First
+
+See [DATA_CHECK_TODO.md](../DATA_CHECK_TODO.md) for the current data verification status.
 
 | Priority | Check | Command / Query |
 |---|---|---|

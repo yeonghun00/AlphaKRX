@@ -11,15 +11,17 @@ ml/features/_pipeline.py     ← data loading, merging, orchestration
     ▼
 ml/features/registry.py      ← FeatureGroup base + @register + topological sort
     │
-    ├── momentum.py           (4 features)
-    ├── volume.py             (3 features)
-    ├── volatility.py         (4 features)
+    ├── momentum.py           (intermediates only)
+    ├── momentum_academic.py  (4 features)
+    ├── volume.py             (2 features)
+    ├── volatility.py         (1 feature)
     ├── fundamental.py        (4 features)
     ├── market.py             (2 features)
-    ├── sector.py             (7 features)
-    ├── sector_neutral.py     (4 features)
-    ├── distress.py           (5 features)
-    └── sector_rotation.py    (3 features)
+    ├── sector.py             (6 features)
+    ├── sector_neutral.py     (9 features)
+    ├── distress.py           (3 features)
+    ├── sector_rotation.py    (3 features)
+    └── macro_interaction.py  (2 features)
     │
     ▼
 ml/models/                    ← multi-model support
@@ -83,7 +85,7 @@ Fold 2:  Train [2011–2013]  [43-day embargo]  Test [2014]
 - 43-day embargo (auto-set to `horizon + exec_lag` at runtime) removes samples that overlap with the test period
 - Each fold trains an independent model; final evaluation is out-of-sample across all folds
 
-See [../bias/DATA.md](../bias/DATA.md) for full look-ahead and leakage controls.
+See [../bias/DATA.md](../bias/DATA.md) for look-ahead and survivorship bias controls, and [../bias/EVAL.md](../bias/EVAL.md) for execution, sample, and liquidity bias.
 
 ---
 

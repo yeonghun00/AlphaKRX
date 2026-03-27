@@ -19,28 +19,48 @@ python3 scripts/run_backtest.py \
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--model` | `lgbm` | Model backend: `lgbm`, `xgboost`, `catboost` |
-| `--start` | `20120101` | Backtest start date (YYYYMMDD) |
+| `--start` | `20100101` | Backtest start date (YYYYMMDD) |
 | `--end` | `20260213` | Backtest end date (YYYYMMDD) |
-| `--horizon` | `21` | Forward return horizon (trading days) |
+| `--horizon` | `63` | Forward return horizon (trading days) |
 | `--top-n` | `30` | Portfolio size |
-| `--rebalance-days` | `63` | Days between rebalances |
-| `--train-years` | `3` | Rolling training window (years) |
+| `--train-years` | `5` | Rolling training window (years) |
 | `--min-market-cap` | `500000000000` | Min market cap (KRW) |
 | `--max-market-cap` | — | Max market cap (KRW) |
-| `--time-decay` | `0.4` | Sample recency weighting (0 = flat) |
-| `--learning-rate` | `0.01` | Boosting learning rate |
-| `--n-estimators` | `2000` | Max boosting rounds |
-| `--patience` | `200` | Early stopping patience |
-| `--buy-fee` | `0.5` | Buy transaction cost (%) |
-| `--sell-fee` | `0.5` | Sell transaction cost (%) |
-| `--buy-rank` | `5` | Max rank to buy new stocks |
-| `--hold-rank` | `50` | Max rank to hold existing stocks |
-| `--embargo-days` | `21` | Purged embargo gap between train and test |
+| `--time-decay` | `0.2` | Sample recency weighting (0=flat, higher=more recent) |
+| `--learning-rate` | `0.005` | Boosting learning rate |
+| `--n-estimators` | `3000` | Max boosting rounds |
+| `--patience` | `300` | Early stopping patience |
+| `--buy-fee` | `0.05` | Buy transaction cost (%) |
+| `--sell-fee` | `0.25` | Sell transaction cost (%) |
+| `--buy-rank` | `10` | Max rank to buy new stocks |
+| `--hold-rank` | `90` | Max rank to hold existing stocks |
+| `--embargo-days` | `21` (auto) | Purged embargo gap (auto-set to horizon + exec_lag at runtime, e.g., 43 for horizon=21) |
 | `--workers` | `4` | Parallel fold workers |
-| `--stress-mode` | off | Enable stress testing |
+| `--exec-lag` | `1` | Execution lag (0=close, 1=T+1 close) |
+| `--benchmark` | `kospi200` | Benchmark: `kospi200`, `kosdaq`, `universe`, or `kosdaq150` |
+| `--stress-mode` | off | Enable stress testing with elevated fees (buy 0.5%, sell 0.5%) |
+| `--vol-exclude-pct` | `0.10` | Stress mode: exclude top N% most volatile names |
 | `--no-cache` | off | Skip feature cache (forces recompute) |
 | `--output` | `default` | Run output folder name under `runs/` |
 | `--save-picks` | off | Save per-rebalance stock picks to CSV |
+
+### Stress-Test & Advanced Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--exec-price` | `close` | Execution price: `close` or `open` |
+| `--twap-days` | `0` | TWAP execution: spread entry/exit over N days (0=off, max=horizon//3) |
+| `--stop-loss` | `0` | Intraperiod stop-loss threshold (0=off, e.g. 0.10 = cap at -10%) |
+| `--permute-feature` | — | Shuffle features to test robustness: `--permute-feature all` or `--permute-feature roe,gpa` |
+| `--exclude-years` | — | Exclude specific years: `--exclude-years 2020,2023` |
+| `--min-daily-value` | `0` | Exclude stocks with daily trading value < N KRW (e.g. 10000000000 for 10B KRW) |
+| `--sector-neutral-score` | on | Enable sector-neutral ranking (default on) |
+| `--no-sector-neutral` | off | Disable sector-neutral ranking |
+| `--cash-out` / `--no-cash-out` | on | Enable/disable 20d regime cash-out rule |
+| `--turnover-test-hold-rank` | `120` | Hold-rank in turnover reduction test variant |
+| `--disable-turnover-test` | off | Disable turnover test variant |
+| `--model-jobs` | `0` | Model threads per worker (0=auto) |
+| `--log-level` | `WARNING` | Python logging level |
 
 ---
 
@@ -76,18 +96,21 @@ python3 scripts/get_picks.py --model-path runs/myrun/model.pkl --top 20
     "boosting_type": "gbdt",
     "num_leaves": 7,
     "max_depth": 3,
-    "learning_rate": 0.05,
-    "feature_fraction": 0.5,
-    "bagging_fraction": 0.8,
+    "lambda_l1": 0.1,
+    "lambda_l2": 1.0,
+    "min_gain_to_split": 0.01,
+    "min_data_in_leaf": 1500,
+    "feature_fraction": 0.4,
+    "bagging_fraction": 0.7,
     "bagging_freq": 5,
-    "min_data_in_leaf": 750,
-    "n_estimators": 1000,
+    "learning_rate": 0.005,
+    "n_estimators": 3000,
     "n_jobs": -1,
     "seed": 42,
 }
 ```
 
-Huber loss (`alpha=0.9`) is robust to return outliers. Shallow trees (`max_depth=3`, `num_leaves=7`) prevent overfitting on limited samples.
+Huber loss (`alpha=0.9`) is robust to return outliers. Shallow trees (`max_depth=3`, `num_leaves=7`) with strong regularization (`lambda_l1=0.1`, `lambda_l2=1.0`) prevent overfitting. CLI `--learning-rate` overrides the default 0.005.
 
 ### XGBoost (`--model xgboost`)
 

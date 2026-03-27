@@ -91,7 +91,7 @@ KRX Market Data + Financial Statements
             │
        ETL Pipelines  ──►  SQLite DB
             │
-   36 Features × 9 Groups        ← momentum, sector, volatility,
+   36 Features × 11 Groups       ← momentum, sector, volatility,
    (registry pattern)                fundamental, distress, ...
             │
    LightGBM Ranker                ← walk-forward, Huber loss,

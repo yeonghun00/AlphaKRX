@@ -629,20 +629,18 @@ def summarize(results: pd.DataFrame, sector_rows: list, output_path: str = "back
             appearances=("date", "count"),
         ).sort_values("total_contribution", ascending=False)
         total_contrib = sec_agg["total_contribution"].sum()
-        display_names = _format_sector_names(sec_agg.head(10).index.tolist())
         sec_rows: list[list[str]] = []
         for sec_name, row in sec_agg.head(10).iterrows():
             pct = row["total_contribution"] / total_contrib * 100 if total_contrib != 0 else 0
-            short_name = display_names[sec_name]
             sec_rows.append([
-                str(short_name),
+                str(sec_name),
                 f"{row['total_contribution']:.2%}",
                 f"{pct:.1f}%",
                 f"{row['avg_weight']:.1%}",
             ])
         _print_table(
-            "--- Sector Attribution ---",
-            ["Sector", "Contribution", "Share", "Avg Weight"],
+            "--- 섹터 기여도 ---",
+            ["섹터", "기여도", "비중", "평균 비중"],
             sec_rows,
         )
 
@@ -907,22 +905,20 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
     ax6.legend(loc="upper left", fontsize=9)
     ax6.grid(True, alpha=0.3)
 
-    # ── Panel 7: Sector Attribution ──
+    # ── Panel 7: 섹터 기여도 ──
     ax7 = fig.add_subplot(gs[3, 1])
     ax7.set_facecolor(C_BG)
     if not sector_df.empty:
         sec_agg = sector_df.groupby("sector")["contribution"].sum().sort_values(ascending=True)
         top_sec = sec_agg.tail(12)
-        display_names_chart = _format_sector_names(top_sec.index.tolist())
-        short_names = [display_names_chart[n] for n in top_sec.index]
         colors_sec = [C_ALPHA if v > 0 else C_NEG for v in top_sec.values]
-        ax7.barh(short_names, top_sec.values * 100, color=colors_sec, zorder=3, height=0.7)
+        ax7.barh(top_sec.index, top_sec.values * 100, color=colors_sec, zorder=3, height=0.7)
         ax7.axvline(0, color="black", linewidth=0.5)
         for i, v in enumerate(top_sec.values):
             ax7.annotate(f"{v:.2%}", (v * 100, i), ha="left" if v > 0 else "right",
                          va="center", fontsize=8, fontweight="bold")
-        ax7.set_title("Sector Attribution", fontsize=13, fontweight="bold")
-        ax7.set_xlabel("Cumulative Contribution (%)", fontsize=10)
+        ax7.set_title("섹터 기여도", fontsize=13, fontweight="bold")
+        ax7.set_xlabel("누적 기여도 (%)", fontsize=10)
 
         # HHI annotation
         if "sector_hhi" in results.columns:
@@ -934,8 +930,8 @@ def _generate_visual_report(results: pd.DataFrame, s: dict, sector_df: pd.DataFr
                          fontsize=10, fontweight="bold", color=conc_color,
                          bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
     else:
-        ax7.text(0.5, 0.5, "No sector data", ha="center", va="center", fontsize=14)
-        ax7.set_title("Sector Attribution", fontsize=13, fontweight="bold")
+        ax7.text(0.5, 0.5, "섹터 데이터 없음", ha="center", va="center", fontsize=14)
+        ax7.set_title("섹터 기여도", fontsize=13, fontweight="bold")
     ax7.grid(True, axis="x", alpha=0.3)
 
     # ── Panel 8: Up/Down Market Scatter ──
@@ -2283,10 +2279,10 @@ def main() -> None:
                         help="Run name — all outputs saved to runs/<name>/ (results.csv, report.png, model.pkl, ...)")
     parser.add_argument("--model-out", type=str, default="",
                         help="(ignored) model saved to runs/<name>/model.pkl automatically")
-    parser.add_argument("--workers", type=int, default=4, help="Parallel walk-forward workers")
+    parser.add_argument("--workers", type=int, default=1, help="Parallel walk-forward workers (default 1 = sequential, preserves holdings across folds; >1 = faster but resets holdings at fold boundaries)")
     parser.add_argument("--model-jobs", type=int, default=0, help="Model threads per worker (0=auto)")
-    parser.add_argument("--buy-fee", type=float, default=0.5, help="Buy fee percent per trade")
-    parser.add_argument("--sell-fee", type=float, default=0.5, help="Sell fee percent per trade")
+    parser.add_argument("--buy-fee", type=float, default=0.05, help="Buy fee percent per trade")
+    parser.add_argument("--sell-fee", type=float, default=0.25, help="Sell fee percent per trade")
     parser.add_argument("--stress-mode", action="store_true", help="Enable realism stress tests")
     parser.add_argument("--vol-exclude-pct", type=float, default=0.10, help="Exclude top N%% volatility names")
     parser.add_argument("--sector-neutral-score", action="store_true", default=True, help="Enable sector-neutral ranking")

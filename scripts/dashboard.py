@@ -506,10 +506,10 @@ def fig_turnover(results: pd.DataFrame) -> go.Figure:
 def fig_sector_bar(sector_df: pd.DataFrame) -> go.Figure:
     if sector_df.empty or "sector" not in sector_df.columns:
         fig = go.Figure()
-        fig.add_annotation(text="No sector_attribution CSV found",
+        fig.add_annotation(text="섹터 데이터 없음",
                            xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
                            font=dict(size=13, color="#8b949e"))
-        fig.update_layout(title="Sector Attribution", template=DARK, height=380)
+        fig.update_layout(title="섹터 기여도", template=DARK, height=380)
         return fig
     agg    = sector_df.groupby("sector")["contribution"].sum().sort_values()
     colors = [C_RED if v < 0 else C_GREEN for v in agg.values]
@@ -517,11 +517,11 @@ def fig_sector_bar(sector_df: pd.DataFrame) -> go.Figure:
         x=agg.values, y=agg.index,
         orientation="h", marker_color=colors,
         text=[f"{v:.2f}" for v in agg.values], textposition="outside",
-        hovertemplate="%{y}<br>Contribution: %{x:.3f}<extra></extra>",
+        hovertemplate="%{y}<br>기여도: %{x:.3f}<extra></extra>",
     ))
     fig.update_layout(
-        title="Sector Attribution — Cumulative Contribution",
-        xaxis_title="Cumulative Contribution",
+        title="섹터 기여도 — 누적 기여",
+        xaxis_title="누적 기여도",
         template=DARK, height=420,
         margin=dict(l=160),
     )

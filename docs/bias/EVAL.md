@@ -23,7 +23,7 @@ forward_return_42d = close[T+42] / close[T] - 1
 forward_return_42d_lag1 = close[T+43] / close[T+1] - 1
 ```
 
-Switching to T+1 execution **improves** Sharpe from 1.74 → 2.87. No execution bias confirmed — the alpha is robust to a one-day delay.
+Switching to T+1 execution produces comparable or better Sharpe. No execution bias confirmed — the alpha is robust to a one-day delay.
 
 ---
 
@@ -126,9 +126,10 @@ Practical limit accounting for slippage: ~5–15B KRW
 
 | Bias Type | Risk | Defense | Result |
 |-----------|------|---------|--------|
-| **Look-ahead (features)** | Future data in features | PIT financials + backward rolling only | ✅ CLEAN |
+| **Look-ahead (features)** | Future data in features | PIT financials + backward rolling only | ⚠️ Known issue |
 | **Look-ahead (target)** | Target leaks into features | Strict `feature_cols` separation | ✅ CLEAN |
-| **Walk-forward leakage** | Future test data in training | 21-day embargo + chronological split | ✅ CLEAN |
+| **Look-ahead (accrual filter)** | Bad accrual filter applied retroactively | CRITICAL — filter uses future-available financial data | 🔴 KNOWN (see AUDIT.md Issue #1) |
+| **Walk-forward leakage** | Future test data in training | 43-day embargo (auto-set to horizon + exec_lag) + chronological split | ✅ CLEAN |
 | **Validation leakage** | Val set extracted from test | Val split from within train window | ✅ CLEAN |
 | **Survivorship (delisted)** | Failed stocks excluded | Fix A + `_exclude_delisted` | ✅ CLEAN |
 | **Survivorship (halted)** | Halted stock return distortion | Fix B + `value > 0` filter | ✅ CLEAN |
@@ -141,4 +142,4 @@ Practical limit accounting for slippage: ~5–15B KRW
 
 ---
 
-*Last updated: 2026-03-25 — config: `--min-market-cap 200B --train-years 3 --top-n 50 --horizon 42`*
+*Last updated: 2026-03-25 — see runs/run for actual backtest results*

@@ -98,6 +98,13 @@ python3 scripts/run_backtest.py \
   --output myrun --save-picks
 ```
 
+> **Note:** These are tuned example values, not all defaults. Key defaults differ from this example:
+> - `--horizon` default is 63 (example uses 21 for faster iteration)
+> - `--train-years` default is 5 (example uses 2 for faster iteration)
+> - `--patience` default is 300 (example uses 100)
+> - `--buy-fee`/`--sell-fee` defaults are 0.05/0.25 (realistic Korean SMID-cap fees)
+> - `--buy-rank`/`--hold-rank` defaults are 10/90
+
 See [model/BACKTEST.md](model/BACKTEST.md) for all CLI flags and model hyperparameters.
 
 ---

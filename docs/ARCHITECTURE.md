@@ -9,7 +9,7 @@ KRX APIs / Raw Financial ZIPs
         |
   ml/features/_pipeline.py   (data loading + merging)
         |
-  ml/features/registry.py    (9 feature groups, @register pattern)
+  ml/features/registry.py    (11 feature groups, @register pattern)
         |
   ml/models/lgbm.py          (LightGBM Huber ranker, default)
   ml/models/xgboost.py       (XGBoost alternative)
@@ -31,7 +31,7 @@ runs/<name>/       Kiwoom REST API
 ## Directory Structure
 
 ```
-algostock/
+AlphaKRX/
 ├── etl/                          # Data ingestion
 │   ├── krx_api.py                # KRX API client (rate-limited, parallel)
 │   ├── price_etl.py              # Prices + stock master
@@ -40,11 +40,13 @@ algostock/
 │   ├── index_etl.py              # Market index ETL
 │   ├── adj_price_etl.py          # Adjusted price chain
 │   └── financial_etl.py          # IFRS financial statements
+│       (stock_history table maintained but not used by feature pipeline)
 ├── ml/
-│   ├── features/                 # 9 feature groups (registry pattern)
+│   ├── features/                 # 11 feature groups (registry pattern)
 │   │   ├── registry.py           # FeatureGroup base + @register
 │   │   ├── _pipeline.py          # DB loading, merging, orchestration
 │   │   ├── momentum.py
+│   │   ├── momentum_academic.py
 │   │   ├── volume.py
 │   │   ├── volatility.py
 │   │   ├── fundamental.py
@@ -52,7 +54,8 @@ algostock/
 │   │   ├── sector.py
 │   │   ├── sector_neutral.py
 │   │   ├── distress.py
-│   │   └── sector_rotation.py
+│   │   ├── sector_rotation.py
+│   │   └── macro_interaction.py
 │   └── models/
 │       ├── base.py               # BaseRanker (save/load/predict)
 │       ├── lgbm.py               # LGBMRanker (default)
@@ -91,7 +94,7 @@ algostock/
 Financial data is only used after its `available_date` (45/90-day rule). No future information leaks into training or evaluation. See [bias/DATA.md](bias/DATA.md).
 
 **Walk-forward validation**
-The model is never tested on training data. Rolling N-year training window, tested on the next calendar year. 21-day embargo between train and test windows.
+The model is never tested on training data. Rolling N-year training window, tested on the next calendar year. 43-day embargo between train and test windows (auto-set to horizon + exec_lag).
 
 **Transaction-cost-aware**
 Buy/sell fees deducted on every rebalance. Hysteresis (`buy-rank` / `hold-rank`) reduces unnecessary turnover.

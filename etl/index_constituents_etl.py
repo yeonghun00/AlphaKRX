@@ -377,8 +377,9 @@ class KRXIndexConstituentsDirect:
 
     def generate_otp(self, market: str, idx_cd: str, idx_id: str, upmid_cd: str) -> Optional[str]:
         """Generate OTP token using the real index codes."""
-        from_date = '20260203'
-        to_date = '20260210'
+        today = datetime.now()
+        from_date = (today - timedelta(days=7)).strftime('%Y%m%d')
+        to_date = today.strftime('%Y%m%d')
 
         config = self.MARKET_CONFIG[market]
         ind_tp_cd = config['ind_tp_cd']

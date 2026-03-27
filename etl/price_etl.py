@@ -93,6 +93,7 @@ class CleanETLPipeline:
                     volume INTEGER,
                     value INTEGER,
                     market_cap INTEGER,
+                    market_type TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (stock_code, date)
                 )
