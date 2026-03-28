@@ -2,6 +2,8 @@
 
 36 features across 11 groups. All computed in `ml/features/` and registered via `@register`.
 
+> **⚠️ Important:** All features must have ≥70% coverage. Low-coverage features cause row loss via `dropna()`. See [MODEL.md](MODEL.md#coverage-rule-critical) for details.
+
 Note: raw momentum columns (`mom_5d`, `mom_21d`, etc.) are **intermediates** — computed but not passed to the model directly. The model uses their sector-neutral versions (`sector_zscore_mom_*`) instead.
 
 See [MODEL.md](MODEL.md) for how the feature registry works and how to add new features.
@@ -51,6 +53,8 @@ Note: `volatility_21d`, `volatility_63d`, and `drawdown_252d` are intermediates 
 
 Financial data is PIT-safe: only used after `available_date` in `financial_periods`.
 See [../bias/DATA.md](../bias/DATA.md) for the 45/90-day disclosure rule.
+
+> **Coverage Note:** All fundamental features require financial statement data which may not exist for all stocks. Current coverage is ~100% for ROE/GPA (imputed from sector median). When adding new financial features, verify coverage ≥70% before adding to `FEATURE_COLUMNS`.
 
 ---
 

@@ -124,6 +124,40 @@ The `@register` decorator adds it to the registry automatically. `FEATURE_COLUMN
 - `columns` must list every column `compute()` adds
 - `dependencies` must list columns produced by other groups (registry topologically sorts execution order)
 
+**Coverage Rule (CRITICAL):**
+
+All features in `columns` must have ≥70% coverage across all rows. The pipeline uses `dropna(subset=required_features)` which removes any row with a missing value in any required feature.
+
+If a feature has lower coverage, it will cause row loss and degrade backtest quality:
+
+| Coverage | Impact |
+|----------|--------|
+| ≥90% | Safe to add |
+| 70-90% | Acceptable, monitor |
+| <70% | Causes significant row loss |
+| <40% | Dangerous - do not add without imputation |
+
+**Before adding a feature:**
+1. Compute coverage across multiple years (2018, 2020, 2022, 2024)
+2. If coverage <70%, either:
+   - **Make it optional**: Don't add to `columns` - compute it but don't require it
+   - **Impute missing values**: Fill NaN with sector/date median
+   - **Investigate**: Check if missing data is a data quality issue
+
+**Safe example (optional feature):**
+```python
+@register
+class MyOptionalFeatures(FeatureGroup):
+    name = "my_optional"
+    columns = []  # NOT required by model
+    dependencies = []
+
+    def compute(self, df):
+        # Computed but not in columns, so not required
+        df["my_optional_feature"] = compute_something(df)
+        return df
+```
+
 ---
 
 ## How to Add a New Model
