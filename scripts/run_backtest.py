@@ -527,6 +527,10 @@ def run(args: argparse.Namespace) -> None:
         )
         args.embargo_days = required_embargo
 
+    if args.end is None:
+        import sqlite3 as _sqlite3
+        with _sqlite3.connect(args.db) as _conn:
+            args.end = _conn.execute("SELECT MAX(date) FROM daily_prices").fetchone()[0]
     print(f"[Backtest] loading data {args.start}~{args.end} ...", flush=True)
     fe = FeatureEngineer(args.db)
     df = fe.prepare_ml_data(
@@ -603,9 +607,13 @@ def run(args: argparse.Namespace) -> None:
         # The old mark-to-last (_last_px / _entry_px - 1) could produce extreme
         # returns (e.g. 191%) when hard filters like bad_accrual create mid-series
         # gaps and _last_px is a distant peak price from a later year.
-        _nan_mask = _df_sorted[lag_col].isna() & _entry_px.gt(0)
         _base_fwd_col = f"forward_return_{args.horizon}d"
         if _base_fwd_col in _df_sorted.columns:
+            # Use pre-computed forward_return whenever lag_col is NaN and base is valid.
+            # _entry_px.gt(0) check is intentionally removed: when a stock is the only
+            # row in its group after universe filters, shift(-1) returns NaN (not 0),
+            # causing gt(0) to be False and silently skipping the fallback.
+            _nan_mask = _df_sorted[lag_col].isna() & _df_sorted[_base_fwd_col].notna()
             _df_sorted.loc[_nan_mask, lag_col] = _df_sorted.loc[_nan_mask, _base_fwd_col]
         else:
             _last_px = _df_sorted.groupby("stock_code")[trade_price_col].transform("last")
@@ -1083,7 +1091,7 @@ def main() -> None:
     )
     parser.add_argument("--db", type=str, default="data/krx_stock_data.db", help="SQLite DB path")
     parser.add_argument("--start", type=str, default="20100101", help="Start date (YYYYMMDD)")
-    parser.add_argument("--end", type=str, default="20260213", help="End date (YYYYMMDD)")
+    parser.add_argument("--end", type=str, default=None, help="End date (YYYYMMDD, default: latest date in DB)")
     parser.add_argument("--horizon", type=int, default=63, help="Forward return horizon (trading days)")
     parser.add_argument(
         "--benchmark", type=str, default="kospi200",

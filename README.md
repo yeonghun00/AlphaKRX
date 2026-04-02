@@ -121,7 +121,7 @@ python3 scripts/run_backtest.py \
   --buy-rank 28 --hold-rank 90 \
   --train-years 3 \
   --buy-fee 0.05 --sell-fee 0.25 \
-  --no-cash-out
+  --no-cash-out --no-cache
 ```
 
 ### 3. Get today's picks
