@@ -1,5 +1,0 @@
-[console_scripts]
-alphakrx-backtest = scripts.run_backtest:main
-alphakrx-etl = scripts.run_etl:main
-alphakrx-live = scripts.run_live:main
-alphakrx-picks = scripts.get_picks:main

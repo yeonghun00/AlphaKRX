@@ -62,3 +62,5 @@ picks_*.csv
 # doc/
 .env
 live/orders/
+alphakrx.egg-info/
+*.egg-info/
