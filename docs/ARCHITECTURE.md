@@ -61,6 +61,20 @@ AlphaKRX/
 │       ├── lgbm.py               # LGBMRanker (default)
 │       ├── xgboost.py
 │       └── catboost.py
+│   ├── backtest/                 # Backtest utilities (reusable)
+│   │   ├── __init__.py           # Exports
+│   │   ├── benchmark.py          # Benchmark loading
+│   │   ├── stats.py              # Statistics computation
+│   │   └── reporting.py          # Visualization & reporting
+│   └── exceptions.py             # Custom exceptions + decorators
+├── tests/                       # Unit tests (54 tests)
+│   ├── test_backtest_stats.py
+│   ├── test_backtest_benchmark.py
+│   ├── test_config.py
+│   └── test_config_pydantic.py
+├── config.py                    # JSON config loader
+├── config_pydantic.py           # Pydantic config (validated)
+├── pyproject.toml               # Package definition
 ├── scripts/
 │   ├── run_backtest.py           # Walk-forward backtest + model save
 │   ├── get_picks.py              # Today's picks from saved model

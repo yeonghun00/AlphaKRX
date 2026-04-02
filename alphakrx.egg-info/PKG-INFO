@@ -1,3 +1,57 @@
+Metadata-Version: 2.4
+Name: alphakrx
+Version: 0.1.0
+Summary: Korean equity quantitative trading system
+Author-email: AlphaKRX Team <team@alphakrx.io>
+License: MIT
+Project-URL: Homepage, https://github.com/alphakrx/alphakrx
+Project-URL: Documentation, https://alphakrx.readthedocs.io
+Project-URL: Repository, https://github.com/alphakrx/alphakrx
+Project-URL: Issues, https://github.com/alphakrx/alphakrx/issues
+Keywords: quantitative-trading,krx,korean-stocks,lightgbm,backtesting
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Financial and Insurance Industry
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: requests>=2.25.0
+Requires-Dist: pandas>=1.3.0
+Requires-Dist: numpy>=1.20.0
+Requires-Dist: openpyxl>=3.0.0
+Requires-Dist: prettytable>=3.10.0
+Requires-Dist: lightgbm>=3.3.0
+Requires-Dist: scikit-learn>=1.0.0
+Requires-Dist: scipy>=1.7.0
+Requires-Dist: numba>=0.57.0
+Requires-Dist: exchange_calendars>=4.2.0
+Requires-Dist: psutil>=5.8.0
+Requires-Dist: schedule>=1.1.0
+Requires-Dist: python-dateutil>=2.8.0
+Requires-Dist: pyyaml>=5.4.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: pydantic-settings>=2.0.0
+Requires-Dist: matplotlib>=3.5.0
+Provides-Extra: dev
+Requires-Dist: pytest>=6.2.0; extra == "dev"
+Requires-Dist: pytest-cov>=2.12.0; extra == "dev"
+Requires-Dist: pytest-xdist>=3.0.0; extra == "dev"
+Requires-Dist: black>=21.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: pre-commit>=3.0.0; extra == "dev"
+Provides-Extra: api
+Requires-Dist: selenium>=4.0.0; extra == "api"
+Requires-Dist: webdriver-manager>=4.0.0; extra == "api"
+Provides-Extra: verify
+Requires-Dist: finance-datareader>=0.9.50; extra == "verify"
+Provides-Extra: docs
+Requires-Dist: sphinx>=4.0.0; extra == "docs"
+Requires-Dist: sphinx-rtd-theme>=0.5.0; extra == "docs"
+Requires-Dist: jupyter-sphinx>=0.4.0; extra == "docs"
+
 # AlphaKRX
 
 **Korean equity quantitative trading system** — KRX data pipeline, LightGBM ranking model, walk-forward backtest, and automated live rebalancing via Kiwoom REST API.
@@ -91,8 +145,8 @@ KRX Market Data + Financial Statements
             │
        ETL Pipelines  ──►  SQLite DB
             │
-   36 Features × 10 Groups       ← momentum, sector, volatility,
-    (registry pattern)                fundamental, distress, ...
+   36 Features × 11 Groups       ← momentum, sector, volatility,
+   (registry pattern)                fundamental, distress, ...
             │
    LightGBM Ranker                ← walk-forward, Huber loss,
    (per-year fold)                   PIT-safe, bias-controlled

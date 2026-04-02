@@ -4,12 +4,16 @@
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - Chrome + ChromeDriver (for index constituents ETL — must match Chrome version)
 - KRX Open API key (free, sign up at data.krx.co.kr)
 
 ```bash
+# Option 1: Traditional
 pip install -r requirements.txt
+
+# Option 2: With pyproject.toml (recommended)
+pip install -e ".[dev]"  # Includes testing, linting tools
 ```
 
 ---
@@ -81,6 +85,20 @@ sqlite3 data/krx_stock_data.db "SELECT COUNT(*) FROM financial_periods;"
 ```
 
 See [etl/ETL.md](etl/ETL.md) and [etl/DATABASE.md](etl/DATABASE.md) for pipeline details.
+
+---
+
+## Run Tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# With coverage
+pytest tests/ --cov=ml --cov=config_pydantic --cov-report=html
+```
+
+See [tests/README.md](../tests/README.md) for details.
 
 ---
 

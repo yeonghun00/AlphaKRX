@@ -17,6 +17,12 @@
     "max_concurrent_requests": 3,
     "enable_parallel_processing": true
   },
+  "kiwoom": {
+    "app_key": "YOUR_KIWOOM_APP_KEY",
+    "app_secret": "YOUR_KIWOOM_APP_SECRET",
+    "account": "12345678-01",
+    "mock": true
+  },
   "processing": {
     "validate_stock_codes": true,
     "validate_dates": true,

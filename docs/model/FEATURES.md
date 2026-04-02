@@ -1,6 +1,6 @@
 # Feature Reference
 
-36 features across 11 groups. All computed in `ml/features/` and registered via `@register`.
+36 features across 10 groups. All computed in `ml/features/` and registered via `@register`.
 
 > **⚠️ Important:** All features must have ≥70% coverage. Low-coverage features cause row loss via `dropna()`. See [MODEL.md](MODEL.md#coverage-rule-critical) for details.
 

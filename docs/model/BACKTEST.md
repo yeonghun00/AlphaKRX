@@ -7,12 +7,12 @@
 ```bash
 python3 scripts/run_backtest.py \
   --start 20100101 --end 20260101 \
-  --horizon 21 --top-n 10 \
-  --train-years 2 \
-  --min-market-cap 100000000000 --max-market-cap 1000000000000 \
-  --buy-rank 10 --hold-rank 120 \
+  --horizon 63 --top-n 30 \
+  --train-years 5 \
+  --min-market-cap 500000000000 \
+  --buy-rank 10 --hold-rank 90 \
   --buy-fee 0.05 --sell-fee 0.25 \
-  --patience 100 --no-cache \
+  --patience 300 --no-cache \
   --output myrun --save-picks
 ```
 
@@ -35,13 +35,13 @@ python3 scripts/run_backtest.py \
 | `--buy-rank` | `10` | Max rank to buy new stocks |
 | `--hold-rank` | `90` | Max rank to hold existing stocks |
 | `--embargo-days` | `21` (auto) | Purged embargo gap (auto-set to horizon + exec_lag at runtime, e.g., 43 for horizon=21) |
-| `--workers` | `4` | Parallel fold workers |
+| `--workers` | `1` | Parallel fold workers (default 1 = sequential, preserves holdings across folds; >1 = faster but resets holdings at fold boundaries) |
 | `--exec-lag` | `1` | Execution lag (0=close, 1=T+1 close) |
 | `--benchmark` | `kospi200` | Benchmark: `kospi200`, `kosdaq`, `universe`, or `kosdaq150` |
 | `--stress-mode` | off | Enable stress testing with elevated fees (buy 0.5%, sell 0.5%) |
 | `--vol-exclude-pct` | `0.10` | Stress mode: exclude top N% most volatile names |
 | `--no-cache` | off | Skip feature cache (forces recompute) |
-| `--output` | `default` | Run output folder name under `runs/` |
+| `--output` | `run` | Run output folder name under `runs/` |
 | `--save-picks` | off | Save per-rebalance stock picks to CSV |
 
 ### Stress-Test & Advanced Flags
