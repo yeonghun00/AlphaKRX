@@ -9,7 +9,7 @@ KRX APIs / Raw Financial ZIPs
         |
   ml/features/_pipeline.py   (data loading + merging)
         |
-  ml/features/registry.py    (11 feature groups, @register pattern)
+  ml/features/registry.py    (12 feature groups, @register pattern)
         |
   ml/models/lgbm.py          (LightGBM Huber ranker, default)
   ml/models/xgboost.py       (XGBoost alternative)
@@ -42,7 +42,7 @@ AlphaKRX/
 │   └── financial_etl.py          # IFRS financial statements
 │       (stock_history table maintained but not used by feature pipeline)
 ├── ml/
-│   ├── features/                 # 11 feature groups (registry pattern)
+│   ├── features/                 # 12 feature groups (registry pattern)
 │   │   ├── registry.py           # FeatureGroup base + @register
 │   │   ├── _pipeline.py          # DB loading, merging, orchestration
 │   │   ├── momentum.py

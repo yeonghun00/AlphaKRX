@@ -8,20 +8,19 @@
 
 | | Strategy | Benchmark (KOSPI 200) |
 |--|--|--|
-| **Total Return** | **+368.6%** | +188.4% |
-| **Ann. Return** | **+18.7%** | — |
-| **Sharpe Ratio** | **0.93** | — |
-| **Calmar Ratio** | **0.83** | — |
-| **Max Drawdown** | -22.5% | — |
-| **Alpha** | **+180.1%** | — |
-| **Beta** | 0.54 | 1.0 |
-| **Up / Down Capture** | 0.98 / 0.47 | 1.0 / 1.0 |
-| **IC / IC IR** | 0.065 / 0.94 | — |
-| **Hit Rate** | 55.1% (27/49 periods) | — |
+| **Total Return** | **+394.3%** | +188.5% |
+| **Ann. Return** | **+19.4%** | — |
+| **Sharpe Ratio** | **0.99** | — |
+| **Calmar Ratio** | **0.84** | — |
+| **Max Drawdown** | -23.1% | — |
+| **Alpha** | **+205.8%** | — |
+| **Beta** | 0.52 | 1.0 |
+| **Up / Down Capture** | 0.97 / 0.42 | 1.0 / 1.0 |
+| **Hit Rate** | 59.2% (29/49 periods) | — |
 
 ![Backtest Report](runs/run/report.png)
 
-*Statistical significance: OLS t-stat 2.89 (p=0.006), Newey-West HAC t-stat 2.66 (p=0.011), IC t-stat 6.61 (p=0.000), Bootstrap Sharpe 95% CI [0.39, 1.81] — all pass at 5%; OLS/IC pass at 1%.*
+*Statistical significance: OLS t-stat 3.03 (p=0.004\*\*\*), Newey-West HAC t-stat 2.78 (p=0.008\*\*\*), Sharpe t-stat 3.03 (p=0.004\*\*\*), IC t-stat 6.60 (p=0.000\*\*\*), Bootstrap Sharpe 95% CI [0.42, 1.64] — 4/5 tests pass at 1%. Quintile returns monotonic (Q1→Q5).*
 
 **Config:** `--start 20100101 --min-market-cap 200B KRW --horizon 42d --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05% --sell-fee 0.25% --no-cash-out`
 
@@ -31,13 +30,13 @@
 |------|--------|-------|--------|
 | 2018 | -6.6% | +12.1% | -0.50 |
 | 2019 | +6.8% | -8.2% | 0.37 |
-| 2020 | +49.4% | +1.2% | 2.21 |
-| 2021 | +27.1% | +29.4% | 0.76 |
-| 2022 | -6.0% | +15.7% | -0.32 |
-| 2023 | +59.8% | +42.3% | 4.55 |
-| 2024 | +0.4% | +8.7% | 0.02 |
-| 2025 | +47.6% | -74.2%* | 3.09 |
-| 2026 | +11.2% | -2.7% | N/A (partial) |
+| 2020 | +53.9% | +5.7% | 2.57 |
+| 2021 | +26.3% | +28.5% | 0.75 |
+| 2022 | -6.7% | +15.1% | -0.35 |
+| 2023 | +57.6% | +40.2% | 4.10 |
+| 2024 | +4.9% | +13.2% | 0.29 |
+| 2025 | +49.0% | -72.7%* | 3.26 |
+| 2026 | +10.9% | -3.1% | N/A (partial) |
 
 *\*2025 alpha is negative because KOSPI 200 returned ~90% in 2025 (K-defense/AI boom). Portfolio still returned +47.6% in absolute terms.*
 
@@ -47,10 +46,10 @@
 
 | Test | Sharpe | Status |
 |------|--------|--------|
-| Long-Short (top 10% − bottom 10%) | 0.77 | OK |
-| Beta-Hedged (β=0.54) | 0.68 | OK |
-| Ex-2023 (remove best year) | 0.71 | PASS ≥0.70 |
-| Turnover reduction (61%→48%) | 0.89 | OK |
+| Long-Short (top 10% − bottom 10%) | 0.75 | OK |
+| Beta-Hedged (β=0.52) | 0.75 | OK |
+| Ex-2023 (remove best year) | 0.77 | PASS ≥0.70 |
+| Turnover reduction (61%→48%) | 0.99 | OK |
 
 ---
 

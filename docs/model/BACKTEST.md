@@ -34,7 +34,7 @@ python3 scripts/run_backtest.py \
 | `--sell-fee` | `0.25` | Sell transaction cost (%) |
 | `--buy-rank` | `10` | Max rank to buy new stocks |
 | `--hold-rank` | `90` | Max rank to hold existing stocks |
-| `--embargo-days` | `21` (auto) | Purged embargo gap (auto-set to horizon + exec_lag at runtime, e.g., 43 for horizon=21) |
+| `--embargo-days` | `21` (auto) | Purged embargo gap (auto-set to horizon + exec_lag at runtime, e.g., 22 for horizon=21) |
 | `--workers` | `1` | Parallel fold workers (default 1 = sequential, preserves holdings across folds; >1 = faster but resets holdings at fold boundaries) |
 | `--exec-lag` | `1` | Execution lag (0=close, 1=T+1 close) |
 | `--benchmark` | `kospi200` | Benchmark: `kospi200`, `kosdaq`, `universe`, or `kosdaq150` |

@@ -2,7 +2,7 @@
 
 SQLite database: `data/krx_stock_data.db`
 
-**20 tables** across 5 domains. See the linked files for full column-level detail.
+**22 tables** across 5 domains. See the linked files for full column-level detail.
 
 | Domain | Tables | Doc |
 |--------|--------|-----|

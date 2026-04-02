@@ -252,6 +252,40 @@ def generate_summary(
         annual_rows,
     )
 
+    # --- Statistical Significance ---
+    sig = s.get("sig", {})
+    if sig:
+        print(f"\n{'--- Statistical Significance ---':^70}")
+        def _stars(p: float) -> str:
+            if pd.isna(p): return ""
+            return "***" if p < 0.01 else ("**" if p < 0.05 else ("*" if p < 0.1 else ""))
+        tests = [
+            ("OLS t-stat",     sig.get("ols_tstat"),    sig.get("ols_pval")),
+            ("NW HAC t-stat",  sig.get("nw_tstat"),     sig.get("nw_pval")),
+            ("Sharpe t-stat",  sig.get("sharpe_tstat"), sig.get("sharpe_pval")),
+            ("IC t-stat",      sig.get("ic_tstat"),     sig.get("ic_pval")),
+            ("Binomial (hit)", None,                    sig.get("binom_pval")),
+        ]
+        for label, tstat, pval in tests:
+            if tstat is not None and pd.notna(tstat):
+                print(f"  {label:<20} t={tstat:+.2f}  p={pval:.3f}  {_stars(pval)}")
+            elif pval is not None and pd.notna(pval):
+                print(f"  {label:<20}          p={pval:.3f}  {_stars(pval)}")
+        ci_lo = sig.get("sharpe_ci_lower")
+        ci_hi = sig.get("sharpe_ci_upper")
+        if pd.notna(ci_lo):
+            print(f"  {'Bootstrap Sharpe CI':<20} 95% CI [{ci_lo:.2f}, {ci_hi:.2f}]")
+        print(f"  {sig.get('verdict_note', '')}")
+
+    # --- Quintile Monotonicity ---
+    if s.get("q_means") is not None:
+        q = s["q_means"]
+        q_vals = [q[f"q{i}_ret"] for i in range(1, 6)]
+        mono = "MONOTONIC" if s.get("q_mono") else "NOT MONOTONIC"
+        print(f"\n{'--- Quintile Returns ---':^70}")
+        print(f"  Q1(Worst)  Q2      Q3      Q4      Q5(Best)   [{mono}]")
+        print("  " + "  ".join(f"{v:+.2%}" for v in q_vals))
+
     generate_visual_report(results, s, sector_df, output_path)
     print_requested_tests(results)
 
@@ -493,6 +527,7 @@ def generate_picks_chart(picks_df: pd.DataFrame, fwd_col: str, output_path: str,
         return
 
     plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = ["AppleGothic", "NanumGothic", "Malgun Gothic", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
 
     df = picks_df.sort_values(fwd_col, ascending=True).tail(max_stocks)
@@ -513,9 +548,9 @@ def generate_picks_chart(picks_df: pd.DataFrame, fwd_col: str, output_path: str,
     ax.set_title(f"Top {n_stocks} Picks ({fwd_col})", fontsize=13, fontweight="bold", pad=10)
     ax.grid(True, axis="x", alpha=0.3)
 
-    plt.tight_layout()
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", "Glyph", UserWarning)
+        plt.tight_layout()
         plt.savefig(output_path, facecolor="white", dpi=100, bbox_inches="tight")
     print(f"[Chart] Saved to {output_path}")
     plt.close(fig)
