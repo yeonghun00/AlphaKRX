@@ -113,6 +113,8 @@ python3 scripts/get_picks.py --model-path runs/myrun/model.pkl --top 20
 
 Huber loss (`alpha=0.9`) is robust to return outliers. Shallow trees (`max_depth=3`, `num_leaves=7`) with strong regularization (`lambda_l1=0.1`, `lambda_l2=1.0`) prevent overfitting. CLI `--learning-rate` overrides the default 0.005.
 
+> **Note:** Increasing tree capacity (num_leaves=31, max_depth=6) was tested and reverted — it inflated train IC without improving OOS Sharpe/Calmar, degrading risk-adjusted performance. The near-null model warnings in folds 2019/2021 (best_iter=15/23) are caused by validation set regime mismatch, not insufficient capacity. Real fix requires improving validation set construction (Fix D in [IMPROVEMENT_ISSUES.md](IMPROVEMENT_ISSUES.md)).
+
 ### XGBoost (`--model xgboost`)
 
 ```python

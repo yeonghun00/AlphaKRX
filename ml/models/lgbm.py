@@ -11,6 +11,7 @@ import pandas as pd
 from .base import BaseRanker
 
 
+
 class LGBMRanker(BaseRanker):
     """LightGBM ranking model using LambdaRank for cross-sectional stock ranking."""
 
@@ -26,7 +27,7 @@ class LGBMRanker(BaseRanker):
         "lambda_l1": 0.1,           # L1: pushes small weights to zero (feature sparsity)
         "lambda_l2": 1.0,           # L2: shrinks all leaf weights — biggest overfit reducer
         "min_gain_to_split": 0.01,  # discard splits that add < 0.01 gain (prunes noisy splits)
-        "min_data_in_leaf": 1500,   # 750 → 1500: each leaf needs more evidence to form
+        "min_data_in_leaf": 1500,   # each leaf needs strong evidence to form
         # ── Stochastic subsampling (decorrelates trees) ───────────────────────
         "feature_fraction": 0.4,    # 0.5 → 0.4: sample fewer features per tree
         "bagging_fraction": 0.7,    # 0.8 → 0.7: sample fewer rows per tree
