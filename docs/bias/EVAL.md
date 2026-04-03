@@ -56,7 +56,7 @@ ex_best = results[results["year"] != best_year]
 ```
 
 If Sharpe ≥ 0.70 after excluding the best year, the strategy does not depend on one outlier year.
-Result: Ex-2023 Sharpe = **0.77** — passes the 0.70 threshold.
+Result: Ex-2025 Sharpe = **1.10** — passes the 0.70 threshold.
 
 ---
 
@@ -136,7 +136,7 @@ Practical limit accounting for slippage: ~5–15B KRW
 | **Stuck live position (halt)** | Sell order on halted holding fails | `build_orders()` skips halted sells, carries forward | ✅ FIXED |
 | **Long-duration halt (>42d)** | Forward return ≈ 0% in training | Accepted limitation — affects <0.1% of rows, filtered by liquidity floor | ⚠️ Known |
 | **Execution bias** | T-close fill impossible | exec_lag=1 (T+1 close execution) | ✅ CLEAN |
-| **Small sample bias** | Single-year dependency | Ex-best-year test (Ex-2023 Sharpe 0.77) | ✅ Robust |
+| **Small sample bias** | Single-year dependency | Ex-best-year test (Ex-2025 Sharpe 1.10) | ✅ Robust |
 | **Liquidity bias** | Unfillable stock selection | min-daily-value filter test | 🔴 AUM limit ~5–15B KRW |
 | **Parameter overfitting** | Hyperparams tuned in-sample | Additional OOS validation needed | ⚠️ Residual risk |
 

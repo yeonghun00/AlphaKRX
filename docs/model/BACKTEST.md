@@ -5,15 +5,16 @@
 ## `run_backtest.py` — Walk-Forward Backtest
 
 ```bash
+# Canonical production command
 python3 scripts/run_backtest.py \
-  --start 20100101 --end 20260101 \
-  --horizon 63 --top-n 30 \
-  --train-years 5 \
-  --min-market-cap 500000000000 \
-  --buy-rank 10 --hold-rank 90 \
+  --start 20100101 \
+  --min-market-cap 200000000000 \
+  --horizon 42 --top-n 50 \
+  --buy-rank 28 --hold-rank 90 \
+  --train-years 3 \
   --buy-fee 0.05 --sell-fee 0.25 \
-  --patience 300 --no-cache \
-  --output myrun --save-picks
+  --no-cash-out --no-cache \
+  --output run --save-picks
 ```
 
 | Flag | Default | Description |

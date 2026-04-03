@@ -86,6 +86,27 @@ AlphaKRX/
 ├── verification/
 │   ├── verify_backtest.py        # Independent result cross-check
 │   └── README.md
+├── docs/                         # Documentation
+│   ├── ARCHITECTURE.md           # This file
+│   ├── SETUP.md                  # Installation & environment setup
+│   ├── LIVE_TRADING.md           # Live trading operations
+│   ├── AUDIT.md                  # Result investigation & red flags
+│   ├── etl/                      # ETL & data layer docs
+│   │   ├── DATABASE.md
+│   │   ├── ETL.md
+│   │   ├── PRICES.md
+│   │   ├── FINANCIALS.md
+│   │   ├── INDICES.md
+│   │   ├── DERIVATIVES_BONDS.md
+│   │   ├── UNIVERSE.md
+│   │   └── DATA_CHECK.md         # Data integrity check results
+│   ├── model/                    # Model & backtest docs
+│   │   ├── MODEL.md
+│   │   ├── FEATURES.md
+│   │   └── BACKTEST.md
+│   └── bias/                     # Bias & data leakage analysis
+│       ├── DATA.md
+│       └── EVAL.md
 ├── runs/                         # One folder per backtest run
 │   └── <run_name>/
 │       ├── results.csv

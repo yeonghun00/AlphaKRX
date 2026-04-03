@@ -8,48 +8,48 @@
 
 | | Strategy | Benchmark (KOSPI 200) |
 |--|--|--|
-| **Total Return** | **+394.3%** | +188.5% |
-| **Ann. Return** | **+19.4%** | — |
-| **Sharpe Ratio** | **0.99** | — |
-| **Calmar Ratio** | **0.84** | — |
-| **Max Drawdown** | -23.1% | — |
-| **Alpha** | **+205.8%** | — |
-| **Beta** | 0.52 | 1.0 |
-| **Up / Down Capture** | 0.97 / 0.42 | 1.0 / 1.0 |
-| **Hit Rate** | 59.2% (29/49 periods) | — |
+| **Total Return** | **+475.98%** | +211.08% |
+| **Ann. Return** | **+21.48%** | — |
+| **Sharpe Ratio** | **1.30** | — |
+| **Calmar Ratio** | **1.50** | — |
+| **Max Drawdown** | -14.28% | — |
+| **Alpha** | **+264.90%** | — |
+| **Beta** | 0.44 | 1.0 |
+| **Up / Down Capture** | 0.91 / 0.22 | 1.0 / 1.0 |
+| **Hit Rate** | 62.00% (31/50 periods) | — |
 
 ![Backtest Report](runs/run/report.png)
 
-*Statistical significance: OLS t-stat 3.03 (p=0.004\*\*\*), Newey-West HAC t-stat 2.78 (p=0.008\*\*\*), Sharpe t-stat 3.03 (p=0.004\*\*\*), IC t-stat 6.60 (p=0.000\*\*\*), Bootstrap Sharpe 95% CI [0.42, 1.64] — 4/5 tests pass at 1%. Quintile returns monotonic (Q1→Q5).*
+*Statistical significance: OLS t-stat 3.84 (p=0.000\*\*\*), Newey-West HAC t-stat 3.48 (p=0.001\*\*\*), Sharpe t-stat 3.84 (p=0.000\*\*\*), IC t-stat 5.88 (p=0.000\*\*\*), Bootstrap Sharpe 95% CI [0.66, 2.03] — 4/5 tests pass at 5% and 1%. IC Mean +0.0586, IC IR +0.83. Quintile tail separation intact (Q5 > Q1); middle quintile ordering noisy in low-data early folds.*
 
-**Config:** `--start 20100101 --min-market-cap 200B KRW --horizon 42d --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05% --sell-fee 0.25% --no-cash-out`
+**Config:** `--start 20100101 --min-market-cap 200000000000 --horizon 42 --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05 --sell-fee 0.25 --no-cash-out --output run --save-picks --no-cache`
 
 ### Annual Breakdown
 
 | Year | Return | Alpha | Sharpe |
 |------|--------|-------|--------|
-| 2018 | -6.6% | +12.1% | -0.50 |
-| 2019 | +6.8% | -8.2% | 0.37 |
-| 2020 | +53.9% | +5.7% | 2.57 |
-| 2021 | +26.3% | +28.5% | 0.75 |
-| 2022 | -6.7% | +15.1% | -0.35 |
-| 2023 | +57.6% | +40.2% | 4.10 |
-| 2024 | +4.9% | +13.2% | 0.29 |
-| 2025 | +49.0% | -72.7%* | 3.26 |
-| 2026 | +10.9% | -3.1% | N/A (partial) |
+| 2018 | -6.11% | +12.60% | -0.44 |
+| 2019 | +11.99% | -3.05% | 0.59 |
+| 2020 | +47.09% | -1.08% | 1.98 |
+| 2021 | +41.07% | +43.33% | 2.27 |
+| 2022 | -4.08% | +17.65% | -0.45 |
+| 2023 | +48.16% | +30.74% | 3.48 |
+| 2024 | +6.50% | +14.77% | 0.43 |
+| 2025 | +51.51% | -70.24%* | 3.65 |
+| 2026 | +15.12% | -7.75% | 2.40 |
 
-*\*2025 alpha is negative because KOSPI 200 returned ~90% in 2025 (K-defense/AI boom). Portfolio still returned +47.6% in absolute terms.*
+*\*2025 alpha is negative because KOSPI 200 had an exceptional year (K-defense/AI boom). Portfolio still returned +51.51% in absolute terms.*
 
-*Annual figures are based on rebalancing windows (~6 per year), not strict calendar years. The last rebalancing window of each year extends ~43 trading days into the following year, so annual alpha figures are for directional intuition only — do not sum or compound them. Total return (+368.6%) and overall alpha (+180.1%) are computed from the full equity curve and are the authoritative figures.*
+*Annual figures are based on rebalancing windows (~6 per year), not strict calendar years. The last rebalancing window of each year extends ~43 trading days into the following year, so annual alpha figures are for directional intuition only — do not sum or compound them. Total return and overall alpha are computed from the full equity curve and are the authoritative figures.*
 
 ### Robustness Tests
 
-| Test | Sharpe | Status |
-|------|--------|--------|
-| Long-Short (top 10% − bottom 10%) | 0.75 | OK |
-| Beta-Hedged (β=0.52) | 0.75 | OK |
-| Ex-2023 (remove best year) | 0.77 | PASS ≥0.70 |
-| Turnover reduction (61%→48%) | 0.99 | OK |
+| Test | Ann. Return / Cost | Sharpe | Status |
+|------|-------------------|--------|--------|
+| Long-Short (top 10% − bottom 10%) | 13.29% | 0.67 | OK |
+| Beta-Hedged (β=0.44) | 14.42% | 1.09 | OK |
+| Ex-2025 (remove best year) | 18.17% | 1.10 | PASS ≥0.70 |
+| Turnover reduction (61%→48%) | -2.22% | 1.22 | OK |
 
 ---
 

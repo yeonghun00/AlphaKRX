@@ -138,7 +138,8 @@ class FeatureEngineer:
                    dp.closing_price, dp.opening_price,
                    dp.high_price, dp.low_price, dp.volume, dp.value, dp.market_cap,
                    COALESCE(adj.adj_closing_price, dp.closing_price) AS adj_closing_price,
-                   COALESCE(adj.adj_opening_price, dp.opening_price) AS adj_opening_price
+                   COALESCE(adj.adj_opening_price, dp.opening_price) AS adj_opening_price,
+                   CASE WHEN adj.adj_closing_price IS NULL THEN 1 ELSE 0 END AS _adj_missing
             FROM daily_prices dp
             LEFT JOIN adj_daily_prices adj
                    ON adj.stock_code = dp.stock_code AND adj.date = dp.date
@@ -154,6 +155,16 @@ class FeatureEngineer:
             if max_market_cap:
                 params.append(max_market_cap)
             prices = pd.read_sql_query(price_q, conn, params=params)
+            adj_missing = prices["_adj_missing"].sum()
+            if adj_missing > 0:
+                pct = adj_missing / len(prices)
+                missing_stocks = prices.loc[prices["_adj_missing"] == 1, "stock_code"].nunique()
+                print(
+                    f"[Pipeline] WARNING: {adj_missing:,} rows ({pct:.1%}) across {missing_stocks} stocks "
+                    f"have no adj price — falling back to raw price. Run adj_price ETL to fix.",
+                    flush=True,
+                )
+            prices = prices.drop(columns=["_adj_missing"])
             stocks = pd.read_sql_query(
                 """
                 SELECT stock_code,
@@ -613,9 +624,10 @@ class FeatureEngineer:
 
         for col in ["roe", "gpa"]:
             merged[col] = pd.to_numeric(merged[col], errors="coerce")
-            sector_med = merged.groupby(["date", "sector"])[col].transform("median")
-            market_med = merged.groupby("date")[col].transform("median")
-            merged[col] = merged[col].fillna(sector_med).fillna(market_med).fillna(0.0)
+            # Explicit missing indicator: missing ROE/GPA is itself a signal
+            # (negative equity, no profitability data, filing delay).
+            # Naming the signal explicitly is more honest than implicit NaN routing.
+            merged[f"{col}_missing"] = merged[col].isna().astype(float)
             merged[col] = merged[col].clip(-5.0, 5.0)
         merged["net_income"] = pd.to_numeric(merged["net_income"], errors="coerce")
         merged["operating_cf"] = pd.to_numeric(merged["operating_cf"], errors="coerce")
@@ -725,6 +737,16 @@ class FeatureEngineer:
             out[residual_col] = out[fwd_col] - (out["rolling_beta_60d"] * out[market_fwd_col])
             out[residual_rank_col] = out.groupby("date")[residual_col].rank(method="average", pct=True).fillna(0.5)
         else:
+            missing = []
+            if market_fwd_col not in out.columns:
+                missing.append(market_fwd_col)
+            if "rolling_beta_60d" not in out.columns:
+                missing.append("rolling_beta_60d")
+            print(
+                f"[Pipeline] WARNING: residual target falling back to raw returns "
+                f"(missing: {', '.join(missing)}). Market data may be incomplete.",
+                flush=True,
+            )
             out[residual_col] = out[fwd_col]
             out[residual_rank_col] = out[rank_col]
         return out
@@ -983,10 +1005,23 @@ class FeatureEngineer:
         data = data.sort_values(["date", "stock_code"]).drop_duplicates(["date", "stock_code"], keep="last")
 
         fwd_col = f"forward_return_{target_horizon}d"
-        required = [c for c in feature_columns if c in data.columns] + [fwd_col]
-        data = data.dropna(subset=required)
 
+        # Drop rows where target is NaN — these are unusable for training.
+        # Feature NaN is kept: LightGBM handles NaN natively, and dropping on
+        # feature NaN silently removes distressed/low-coverage stocks (selection bias).
+        n_before = len(data)
+        data = data.dropna(subset=[fwd_col])
+        n_dropped_target = n_before - len(data)
+        if n_dropped_target > 0:
+            print(f"[Features] dropped {n_dropped_target:,} rows with NaN target ({n_dropped_target/n_before:.1%})", flush=True)
+
+        # Log feature coverage so sparse features are visible.
         feature_cols = [c for c in feature_columns if c in data.columns]
+        nan_rates = {c: data[c].isna().mean() for c in feature_cols if data[c].isna().any()}
+        if nan_rates:
+            worst = sorted(nan_rates.items(), key=lambda x: -x[1])[:5]
+            print(f"[Features] NaN rates (top 5): " + ", ".join(f"{c}={r:.1%}" for c, r in worst), flush=True)
+
         for col in feature_cols:
             lo = data.groupby("date")[col].transform(lambda s: s.quantile(0.01))
             hi = data.groupby("date")[col].transform(lambda s: s.quantile(0.99))

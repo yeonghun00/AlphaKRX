@@ -106,21 +106,17 @@ See [tests/README.md](../tests/README.md) for details.
 
 ```bash
 python3 scripts/run_backtest.py \
-  --start 20100101 --end 20260101 \
-  --horizon 21 --top-n 10 \
-  --train-years 2 \
-  --min-market-cap 100000000000 --max-market-cap 1000000000000 \
-  --buy-rank 10 --hold-rank 120 \
+  --start 20100101 \
+  --min-market-cap 200000000000 \
+  --horizon 42 --top-n 50 \
+  --buy-rank 28 --hold-rank 90 \
+  --train-years 3 \
   --buy-fee 0.05 --sell-fee 0.25 \
-  --patience 100 --no-cache \
-  --output myrun --save-picks
+  --no-cash-out --no-cache \
+  --output run --save-picks
 ```
 
-> **Note:** These are tuned example values, not all defaults. Key defaults differ from this example:
-> - `--horizon` default is 63 (example uses 21 for faster iteration)
-> - `--train-years` default is 5 (example uses 2 for faster iteration)
-> - `--patience` default is 300 (example uses 100)
-> - `--buy-fee`/`--sell-fee` defaults are 0.05/0.25 (realistic Korean SMID-cap fees)
+> **Note:** This is the canonical production command (3yr rolling window, large-cap universe ≥200B KRW, 42-day horizon). It produced Sharpe 1.30, Ann. Return 21.48%, Max DD -14.28% over 9 out-of-sample years (2018–2026).
 > - `--buy-rank`/`--hold-rank` defaults are 10/90
 
 See [model/BACKTEST.md](model/BACKTEST.md) for all CLI flags and model hyperparameters.

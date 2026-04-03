@@ -277,6 +277,14 @@ def generate_summary(
             print(f"  {'Bootstrap Sharpe CI':<20} 95% CI [{ci_lo:.2f}, {ci_hi:.2f}]")
         print(f"  {sig.get('verdict_note', '')}")
 
+    # --- IC Summary ---
+    if pd.notna(s.get("ic_mean")):
+        ic_ir = s.get("ic_ir")
+        ic_str = f"  {'IC Mean':<20} {s['ic_mean']:+.4f}"
+        if pd.notna(ic_ir):
+            ic_str += f"   IC IR: {ic_ir:+.2f}"
+        print(ic_str)
+
     # --- Quintile Monotonicity ---
     if s.get("q_means") is not None:
         q = s["q_means"]
