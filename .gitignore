@@ -35,6 +35,7 @@ Thumbs.db
 # Standalone result files outside runs/
 backtest_*.csv
 screening_results_*.xlsx
+*.html
 
 # Explicitly track all run outputs (csv, png, pkl, md)
 !runs/
