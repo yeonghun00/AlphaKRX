@@ -56,7 +56,7 @@ ex_best = results[results["year"] != best_year]
 ```
 
 If Sharpe ≥ 0.70 after excluding the best year, the strategy does not depend on one outlier year.
-Result: Ex-2025 Sharpe = **1.10** — passes the 0.70 threshold.
+Result: Ex-2025 Sharpe = **0.77** — passes the 0.70 threshold.
 
 ---
 
@@ -76,7 +76,7 @@ If Q1–Q5 returns increase monotonically with model rank, signal consistency is
 IC  = rank correlation between model scores and actual returns (per rebalance)
 IC IR = mean(IC) / std(IC)   ← signal-to-noise ratio
 
-IC IR = 0.94 → IC is on average 0.94σ above zero = stable signal
+IC IR = 0.77 → IC is on average 0.77σ above zero = stable signal
 ```
 
 High IC with low IC IR = unstable (only works in certain market regimes). High IC with high IC IR = consistently predictive signal.
@@ -126,7 +126,7 @@ Practical limit accounting for slippage: ~5–15B KRW
 
 | Bias Type | Risk | Defense | Result |
 |-----------|------|---------|--------|
-| **Look-ahead (features)** | Future data in features | PIT financials + backward rolling only | ⚠️ Known issue |
+| **Look-ahead (features)** | Future data in features | PIT financials + backward rolling only; 3 index-constituent features removed 2026-04-07 (see AUDIT.md ISSUE 9) | ✅ CLEAN |
 | **Look-ahead (target)** | Target leaks into features | Strict `feature_cols` separation | ✅ CLEAN |
 | **Look-ahead (accrual filter)** | Bad accrual filter applied retroactively | CRITICAL — filter uses future-available financial data | 🔴 KNOWN (see AUDIT.md Issue #1) |
 | **Walk-forward leakage** | Future test data in training | 43-day embargo (auto-set to horizon + exec_lag) + chronological split | ✅ CLEAN |
@@ -136,10 +136,14 @@ Practical limit accounting for slippage: ~5–15B KRW
 | **Stuck live position (halt)** | Sell order on halted holding fails | `build_orders()` skips halted sells, carries forward | ✅ FIXED |
 | **Long-duration halt (>42d)** | Forward return ≈ 0% in training | Accepted limitation — affects <0.1% of rows, filtered by liquidity floor | ⚠️ Known |
 | **Execution bias** | T-close fill impossible | exec_lag=1 (T+1 close execution) | ✅ CLEAN |
-| **Small sample bias** | Single-year dependency | Ex-best-year test (Ex-2025 Sharpe 1.10) | ✅ Robust |
+| **Small sample bias** | Single-year dependency | Ex-best-year test (Ex-2025 Sharpe 0.77) | ✅ Robust |
 | **Liquidity bias** | Unfillable stock selection | min-daily-value filter test | 🔴 AUM limit ~5–15B KRW |
-| **Parameter overfitting** | Hyperparams tuned in-sample | Additional OOS validation needed | ⚠️ Residual risk |
+| **Hyperparameter selection** | Params chosen after seeing fold results | None — structural limit of iterative development | ⚠️ Residual |
+| **Feature selection (snooping)** | 34 surviving features selected through iterative testing | None — structural limit | ⚠️ Residual |
+| **Sector label PIT** | Industry label may lag actual reclassification date | `financial_periods.available_date` (data limit, not fixable) | ⚠️ Partial |
+| **Transaction cost model** | 0.25% sell underestimates market impact for mid-caps | Live trading will reveal true cost | ⚠️ Unverified |
+| **Down Capture inflation** | 0.20 may reflect residual bias, not just skill | Needs live validation | ⚠️ Unverified |
 
 ---
 
-*Last updated: 2026-03-25 — see runs/run for actual backtest results*
+*Last updated: 2026-04-07 — see runs/run for actual backtest results*

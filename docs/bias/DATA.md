@@ -218,3 +218,19 @@ new_holdings = list(set(new_picks.head(top_n)["stock_code"]) | stuck_holdings)
 Stuck holdings are **preserved in `live/state.json`** and re-evaluated on every subsequent rebalance. Once trading resumes (`value > 0`), the stock is sold normally on the next cycle.
 
 **Known limitation:** Fix B uses `last_price` (last available price in the dataset) for long-duration halts (> 42 trading days). If the halt extends to the end of the dataset, forward return ≈ 0% in training rather than the eventual post-resumption crash. In practice this affects very few rows — stocks halted this long almost always end in delisting (captured by Fix A) or are filtered by the liquidity floor before selection.
+
+---
+
+## 3. Confirmed Lookahead Removed (2026-04-07)
+
+Three features were confirmed lookahead and removed after a systematic audit. Full details in `docs/AUDIT.md` ISSUE 9.
+
+| Feature | Root Cause | Impact |
+|---------|-----------|--------|
+| `constituent_index_count` | `index_constituents` DB stored current-snapshot back-filled to all 194 historical months | Permutation test: Sharpe 1.34→0.98 |
+| `sector_breadth_21d` | Derived from `constituent_index_count > 0` | Same root cause |
+| `sector_constituent_share` | Derived from `constituent_index_count > 0` | Same root cause |
+
+**How it was found:** Down Capture of 0.14 was implausibly low. Queried the DB directly — confirmed 194 months × 60 indices with zero constituent changes. The table was a static snapshot of current membership, not a historical time series.
+
+**Clean baseline after removal:** Sharpe 1.34→0.96, Total Return 492%→310%, Down Capture 0.14→0.20.
