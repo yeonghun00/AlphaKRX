@@ -69,6 +69,7 @@ def _run_fold(payload: dict) -> dict:
     hold_rank: int = payload["hold_rank"]
     embargo_days: int = payload["embargo_days"]
     cash_out_enabled: bool = payload.get("cash_out", False)
+    weighting: str = payload.get("weighting", "equal")
     bench_returns_by_date: dict = payload.get("bench_returns_by_date", {})
     model_class_name: str = payload.get("model_class", "lgbm")
     run_turnover_test: bool = payload.get("run_turnover_test", True)
@@ -307,11 +308,19 @@ def _run_fold(payload: dict) -> dict:
         _ret_col_pick = eval_fwd_col if eval_fwd_col in picks.columns else fwd_col
         sl_triggered_rate = float(picks["_sl_triggered"].mean()) if stop_loss_pct > 0 and "_sl_triggered" in picks.columns else 0.0
         if portfolio_size > 0 and "closing_price" in picks.columns:
-            # Discrete share sizing: equal-weight budget, floor to whole shares
             investable = portfolio_size * (1.0 - cash_weight)
-            per_stock = investable / max(len(picks), 1)
             _prices = picks["closing_price"].clip(lower=1.0)
-            _shares = np.floor(per_stock / _prices)
+            if weighting == "signal" and "score_rank" in picks.columns and picks["score_rank"].sum() > 0:
+                _sw = picks["score_rank"] / picks["score_rank"].sum()
+                _shares = np.floor((_sw * investable) / _prices)
+            elif weighting == "signal_vol" and "score_rank" in picks.columns and "volatility_21d" in picks.columns:
+                _vol = picks["volatility_21d"].replace(0, np.nan).fillna(picks["volatility_21d"].median()).clip(lower=1e-6)
+                _raw = picks["score_rank"] / _vol
+                _sw = _raw / _raw.sum()
+                _shares = np.floor((_sw * investable) / _prices)
+            else:
+                # equal-weight (default)
+                _shares = np.floor((investable / max(len(picks), 1)) / _prices)
             _invested = _shares * _prices
             _total_invested = float(_invested.sum())
             cash_drag_pct = 1.0 - _total_invested / portfolio_size
@@ -477,6 +486,14 @@ def _run_fold(payload: dict) -> dict:
         f"(rebalance_points={len(rebalance_dates)}, result_rows={len(rows)})",
         flush=True,
     )
+    _fi = None
+    if hasattr(model, "feature_importance"):
+        try:
+            _fi_df = model.feature_importance()
+            _fi = dict(zip(_fi_df["feature"], _fi_df["importance"]))
+        except Exception:
+            pass
+
     return {
         "test_year": info["test_year"],
         "rows": rows,
@@ -485,6 +502,7 @@ def _run_fold(payload: dict) -> dict:
         "final_holdings": list(prev_holdings),
         "final_holdings_tuned": list(prev_holdings_tuned),
         "final_scores_tuned": prev_scores_tuned,
+        "feature_importance": _fi,
     }
 
 
@@ -782,7 +800,12 @@ def run(args: argparse.Namespace) -> None:
 
     residual_rank_col = f"target_residual_rank_{args.horizon}d"
     rank_label_col = f"target_rank_label_{args.horizon}d"
-    base_col = residual_rank_col if residual_rank_col in df.columns else f"target_rank_{args.horizon}d"
+    if getattr(args, "composite_target", False) and "target_composite_residual_rank" in df.columns:
+        base_col = "target_composite_residual_rank"
+    elif residual_rank_col in df.columns:
+        base_col = residual_rank_col
+    else:
+        base_col = f"target_rank_{args.horizon}d"
 
     # Ranking objectives (lambdarank) require integer labels [0-4].
     # Regression objectives (huber, rmse, etc.) use the continuous rank [0,1] directly.
@@ -797,7 +820,19 @@ def run(args: argparse.Namespace) -> None:
     # Load benchmark index returns
     _bench_label = getattr(args, "benchmark", "kospi200")
     _bench_index_code = BENCHMARK_INDEX_MAP.get(_bench_label)
-    if _bench_index_code:
+    if _bench_label == "universe_cap":
+        # Cap-weighted universe: pre-compute from df (no DB query needed)
+        _fwd = eval_fwd_col if eval_fwd_col in df.columns else fwd_col
+        if "market_cap" in df.columns and _fwd in df.columns:
+            _uw = df[["date", "market_cap", _fwd]].dropna()
+            _cap_sum = _uw.groupby("date")["market_cap"].sum()
+            _cap_ret = (_uw[_fwd] * _uw["market_cap"]).groupby(_uw["date"]).sum()
+            bench_returns_by_date = (_cap_ret / _cap_sum).dropna().to_dict()
+            print(f"[Benchmark] cap-weighted universe: {len(bench_returns_by_date)} dates", flush=True)
+        else:
+            print("[Benchmark] WARNING: market_cap not available, falling back to equal-weight universe", flush=True)
+            bench_returns_by_date = {}
+    elif _bench_index_code:
         bench_returns_by_date = _load_benchmark_returns(args.db, _bench_index_code, args.horizon)
         if not bench_returns_by_date:
             print(f"[Benchmark] WARNING: falling back to universe average (no data for {_bench_index_code})", flush=True)
@@ -862,11 +897,16 @@ def run(args: argparse.Namespace) -> None:
     print(f"  Top N:            {args.top_n}")
     print(f"  Portfolio Size:   {args.portfolio_size:,} KRW  (discrete share rounding)")
     print(f"  Rebalance/Horizon: every {args.horizon} trading days")
-    _bench_display = _bench_index_code if _bench_index_code else "universe (equal-weight)"
+    _bench_display_map = {
+        "universe": "universe (equal-weight)",
+        "universe_cap": "universe (cap-weighted)",
+    }
+    _bench_display = _bench_display_map.get(_bench_label) or _bench_index_code or _bench_label
     print(f"  Benchmark:        {_bench_display}  [{_bench_label}]")
     print(f"  Buy Rank:         <= {args.buy_rank}   Hold Rank: <= {args.hold_rank}")
     print(f"  Fees:             buy={effective_buy_fee:.2f}%  sell={effective_sell_fee:.2f}%")
     print(f"  Sector Neutral:   {effective_sector_neutral}")
+    print(f"  Weighting:        {'signal-proportional (score_rank)' if getattr(args, 'signal_weight', False) else 'equal-weight'}")
     cash_out_flag = getattr(args, "cash_out", False)
     print(f"  Cash-Out (20d):   {cash_out_flag}")
     print(
@@ -919,6 +959,7 @@ def run(args: argparse.Namespace) -> None:
             "hold_rank": args.hold_rank,
             "embargo_days": args.embargo_days,
             "cash_out": args.cash_out,
+            "weighting": getattr(args, "weighting", "equal"),
             "bench_returns_by_date": bench_returns_by_date,
             "model_class": args.model,
             "run_turnover_test": not args.disable_turnover_test,
@@ -1034,6 +1075,27 @@ def run(args: argparse.Namespace) -> None:
     run_name = Path(args.output).stem
     run_dir  = Path("runs") / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Feature Importance (avg gain across folds) ────────────────────────
+    _fi_rows = [r.get("feature_importance") for r in fold_results if r.get("feature_importance")]
+    if _fi_rows:
+        all_features = list(_fi_rows[0].keys())
+        avg_importance = {f: sum(d.get(f, 0) for d in _fi_rows) / len(_fi_rows) for f in all_features}
+        total = sum(avg_importance.values()) or 1.0
+        sorted_fi = sorted(avg_importance.items(), key=lambda x: x[1], reverse=True)
+
+        print("\n" + "=" * 70)
+        print("  FEATURE IMPORTANCE (avg gain across folds)")
+        print("=" * 70)
+        print(f"  {'Feature':<35} {'Avg Gain%':>9}  Bar")
+        print("-" * 70)
+        for feat, imp in sorted_fi:
+            pct = imp / total * 100
+            bar = "█" * int(pct / 1.5)
+            dead = "  ← dead" if pct < 0.05 else ""
+            print(f"  {feat:<35} {pct:>8.2f}%  {bar}{dead}")
+        print("=" * 70)
+
     summarize(results, sector_rows, output_path=str(run_dir / "report.png"), model=latest_model)
 
     # ── Auto-generate interactive dashboard ───────────────────────────────
@@ -1131,6 +1193,10 @@ def main() -> None:
     parser.add_argument("--turnover-test-smoothing-alpha", type=float, default=0.70, help="EMA alpha for turnover test")
     parser.add_argument("--disable-turnover-test", action="store_true", help="Disable turnover test variant")
     parser.add_argument("--save-picks", action="store_true", help="Save picked stocks per rebalance date to CSV")
+    parser.add_argument("--composite-target", action="store_true", help="Use composite multi-horizon target (0.4*rank_21d + 0.4*rank_42d + 0.2*rank_63d) instead of single-horizon residual rank")
+    parser.add_argument("--weighting", type=str, default="equal",
+                        choices=["equal", "signal", "signal_vol"],
+                        help="Portfolio weighting: equal (default), signal (∝ score_rank), signal_vol (∝ score_rank / volatility_21d)")
     parser.add_argument("--no-cache", action="store_true", help="Disable feature cache")
     parser.add_argument("--log-level", type=str, default="WARNING", help="Python logging level")
     # ── Stress Tests ──────────────────────────────────────────────────────

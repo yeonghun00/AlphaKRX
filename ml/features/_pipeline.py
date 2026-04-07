@@ -34,7 +34,7 @@ class FeatureEngineer:
     to registered FeatureGroup classes.
     """
 
-    CACHE_VERSION = "unified_v55_interact_20260228"
+    CACHE_VERSION = "unified_v62_no_ic_pipeline_20260407"
     BS_ITEM_CODES = {
         "equity": "ifrs-full_Equity",
         "assets": "ifrs-full_Assets",
@@ -95,8 +95,6 @@ class FeatureEngineer:
         with self._connect() as conn:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_dp_stock_date ON daily_prices(stock_code, date)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_dp_date_mcap ON daily_prices(date, market_cap)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_ic_date_stock ON index_constituents(date, stock_code)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_ic_date_index ON index_constituents(date, index_code)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_fp_stock_avail_consol ON financial_periods(stock_code, available_date, consolidation_type)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_bs_item_period ON financial_items_bs_cf(item_code_normalized, period_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_pl_item_period ON financial_items_pl(item_code_normalized, period_id)")
@@ -190,61 +188,13 @@ class FeatureEngineer:
         keep = merged["delisting_date"].isna() | (merged["date"] < merged["delisting_date"])
         return merged.loc[keep].drop(columns=["delisting_date"])
 
-    def _load_index_membership(self, start_date: str, end_date: str) -> pd.DataFrame:
-        """Load index constituent snapshots for a date range.
-
-        Loads a small warmup window before start_date so that merge_asof can
-        find the most recent membership entry even for the first price rows.
-        """
-        # Load from 400 days before start to capture the most recent rebalance
-        # snapshot that precedes the window, so merge_asof never misses a stock.
-        iso_start_with_warmup = self._to_iso(
-            (datetime.strptime(start_date, "%Y%m%d") - timedelta(days=400)).strftime("%Y%m%d")
-        )
-        iso_end = self._to_iso(end_date)
-        conn = self._connect()
-        members = pd.read_sql_query(
-            """
-            SELECT date AS membership_date, stock_code, COUNT(DISTINCT index_code) AS constituent_index_count
-            FROM index_constituents
-            WHERE date >= ? AND date <= ?
-            GROUP BY membership_date, stock_code
-            """,
-            conn,
-            params=[iso_start_with_warmup, iso_end],
-        )
-        if not members.empty:
-            members["membership_date"] = members["membership_date"].astype(str).str.replace("-", "", regex=False)
-        return members
-
-    def _merge_index_membership(self, data: pd.DataFrame, members: pd.DataFrame) -> pd.DataFrame:
-        """PIT-join index membership onto price data using merge_asof.
-
-        For each (stock_code, date) in data, picks the most recent membership
-        snapshot whose membership_date <= date.  This correctly handles index
-        rebalances that occur mid-month (the old first-of-month approximation
-        could miss up to 15 trading days of membership changes).
-        """
-        if members.empty:
-            data["constituent_index_count"] = 0.0
-            return data
-        data["_date_dt"] = pd.to_datetime(data["date"], format="%Y%m%d", errors="coerce")
-        right = members.copy()
-        right["_mem_dt"] = pd.to_datetime(right["membership_date"], format="%Y%m%d", errors="coerce")
-        right = right.dropna(subset=["_mem_dt"]).sort_values(["_mem_dt", "stock_code"])
-        merged = pd.merge_asof(
-            data.sort_values(["_date_dt", "stock_code"]),
-            right[["stock_code", "_mem_dt", "constituent_index_count"]],
-            left_on="_date_dt",
-            right_on="_mem_dt",
-            by="stock_code",
-            direction="backward",
-        )
-        merged["constituent_index_count"] = pd.to_numeric(
-            merged["constituent_index_count"], errors="coerce"
-        ).fillna(0.0)
-        merged = merged.drop(columns=["_date_dt", "_mem_dt"], errors="ignore")
-        return merged.sort_values(["stock_code", "date"])
+    # _load_index_membership / _merge_index_membership REMOVED (2026-04-07)
+    # index_constituents DB stores a static current-snapshot back-filled to all
+    # historical dates — confirmed lookahead bias (permutation test: Sharpe 1.34→0.98).
+    # All derived features (constituent_index_count, sector_breadth_21d,
+    # sector_constituent_share) removed from FEATURE_COLUMNS.
+    # To restore: rebuild ETL with real historical rebalancing events (Bloomberg /
+    # Refinitiv / KRX corporate-action history), not a KRX OTP scrape snapshot.
 
     def _load_sector_membership(self, start_date: str, end_date: str) -> pd.DataFrame:
         """Load sector labels from financial_periods.industry_name (point-in-time).
@@ -321,7 +271,8 @@ class FeatureEngineer:
                 "Run: algostock index backfill -s <start> -e <end> -t kospi_index --force",
                 flush=True,
             )
-            return pd.DataFrame(columns=["date", "market_regime_120d", "market_regime_20d", "market_ret_1d", f"market_forward_return_{target_horizon}d"])
+            fwd_cols = [f"market_forward_return_{h}d" for h in sorted({21, 42, 63, target_horizon})]
+            return pd.DataFrame(columns=["date", "market_regime_120d", "market_regime_20d", "market_ret_1d"] + fwd_cols)
         # Warn if coverage is sparse (< 60% of expected trading days ≈ 252/year).
         n_days = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days
         expected_trading_days = max(1, int(n_days * 5 / 7 * 0.98))  # rough weekday estimate
@@ -337,8 +288,11 @@ class FeatureEngineer:
         idx["market_regime_120d"] = idx["closing_index"] / idx["closing_index"].rolling(120, min_periods=60).mean() - 1
         idx["market_regime_20d"] = idx["closing_index"] / idx["closing_index"].rolling(20, min_periods=10).mean() - 1
         idx["market_ret_1d"] = idx["closing_index"].pct_change()
-        idx[f"market_forward_return_{target_horizon}d"] = idx["closing_index"].shift(-target_horizon) / idx["closing_index"] - 1
-        return idx[["date", "market_regime_120d", "market_regime_20d", "market_ret_1d", f"market_forward_return_{target_horizon}d"]]
+        all_horizons = sorted({21, 42, 63, target_horizon})
+        for h in all_horizons:
+            idx[f"market_forward_return_{h}d"] = idx["closing_index"].shift(-h) / idx["closing_index"] - 1
+        fwd_cols = [f"market_forward_return_{h}d" for h in all_horizons]
+        return idx[["date", "market_regime_120d", "market_regime_20d", "market_ret_1d"] + fwd_cols]
 
     def _load_macro_indices(self, start_date: str, end_date: str) -> pd.DataFrame:
         """Load deriv_index_daily data and compute 13 macro features (V5.5 Macro Layer).
@@ -634,6 +588,145 @@ class FeatureEngineer:
         return merged
 
     # ------------------------------------------------------------------
+    # Quarterly earnings momentum (YoY growth)
+    # ------------------------------------------------------------------
+
+    def _load_quarterly_earnings(self, end_date: str) -> pd.DataFrame:
+        """Load quarterly DART filings and compute YoY net income growth per period.
+
+        Strategy:
+        - Korean filings are YTD (cumulative within fiscal year).
+        - Standalone Q NI is derived by subtracting prior quarter's YTD.
+        - YoY growth = (standalone_Q_this_year - standalone_Q_last_year) / |prior|
+        - PIT-safe: uses available_date for merge_asof, not fiscal_date.
+
+        Returns DataFrame: stock_code, available_date, earnings_growth_yoy
+        """
+        REPORT_TO_QUARTER = {
+            "1분기보고서": 1,
+            "반기보고서": 2,
+            "3분기보고서": 3,
+            "사업보고서": 4,
+        }
+        try:
+            conn = self._connect()
+            query = """
+                SELECT fp.stock_code,
+                       fp.fiscal_date,
+                       fp.available_date,
+                       fp.report_type,
+                       CAST(pl.amount_current_ytd AS REAL) AS net_income_ytd
+                FROM financial_periods fp
+                JOIN financial_items_pl pl ON fp.id = pl.period_id
+                WHERE pl.item_code_normalized = ?
+                  AND fp.consolidation_type = '연결'
+                  AND fp.report_type IN ('1분기보고서', '반기보고서', '3분기보고서', '사업보고서')
+                  AND fp.available_date <= ?
+                ORDER BY fp.stock_code, fp.fiscal_date, fp.available_date
+            """
+            raw = pd.read_sql_query(
+                query, conn,
+                params=[self.PL_ITEM_CODES["net_income"], end_date],
+            )
+        except Exception as exc:
+            self.logger.warning("_load_quarterly_earnings failed: %s", exc)
+            return pd.DataFrame(columns=["stock_code", "available_date", "earnings_growth_yoy"])
+
+        if raw.empty:
+            return pd.DataFrame(columns=["stock_code", "available_date", "earnings_growth_yoy"])
+
+        raw["quarter"] = raw["report_type"].map(REPORT_TO_QUARTER)
+        raw["fiscal_year"] = raw["fiscal_date"].str[:4].astype(int)
+        raw["net_income_ytd"] = pd.to_numeric(raw["net_income_ytd"], errors="coerce")
+
+        # Dedup: prefer the latest filing for the same (stock, fiscal_date, report_type)
+        raw = raw.sort_values(["stock_code", "fiscal_date", "report_type", "available_date"])
+        raw = raw.drop_duplicates(["stock_code", "fiscal_date", "report_type"], keep="last")
+
+        # Pivot: rows=(stock_code, fiscal_year), cols=quarter, values=ytd NI
+        pivot = raw.pivot_table(
+            index=["stock_code", "fiscal_year"],
+            columns="quarter",
+            values="net_income_ytd",
+            aggfunc="last",
+        )
+        # Ensure all four quarter columns exist
+        for q in [1, 2, 3, 4]:
+            if q not in pivot.columns:
+                pivot[q] = np.nan
+        pivot = pivot.reset_index()
+
+        # Compute standalone quarterly NI from YTD (subtraction within fiscal year)
+        standalone = pivot[["stock_code", "fiscal_year"]].copy()
+        standalone[1] = pivot[1]                          # Q1 = Q1 YTD
+        standalone[2] = pivot[2] - pivot[1]               # Q2 = H1 YTD - Q1 YTD
+        standalone[3] = pivot[3] - pivot[2]               # Q3 = Q3 YTD - H1 YTD
+        standalone[4] = pivot[4] - pivot[3]               # Q4 = Annual YTD - Q3 YTD
+
+        # Long format: one row per (stock, fiscal_year, quarter)
+        long = standalone.melt(
+            id_vars=["stock_code", "fiscal_year"],
+            value_vars=[1, 2, 3, 4],
+            var_name="quarter",
+            value_name="standalone_ni",
+        )
+
+        # Re-attach available_date from original raw data
+        avail = raw[["stock_code", "fiscal_year", "quarter", "available_date"]].copy()
+        long = long.merge(avail, on=["stock_code", "fiscal_year", "quarter"], how="left")
+
+        # YoY: join standalone NI with the same quarter from the prior fiscal year
+        prior = long[["stock_code", "fiscal_year", "quarter", "standalone_ni"]].copy()
+        prior = prior.rename(columns={"standalone_ni": "prior_ni", "fiscal_year": "_prior_year"})
+        prior["fiscal_year"] = prior["_prior_year"] + 1   # align to the *next* year's record
+        prior = prior.drop(columns=["_prior_year"])
+
+        long = long.merge(prior, on=["stock_code", "fiscal_year", "quarter"], how="left")
+
+        # YoY growth = (current - prior) / |prior|, only when |prior| is large enough
+        abs_prior = long["prior_ni"].abs()
+        valid_denom = abs_prior.where(abs_prior > 1e7, np.nan)  # require ≥10M KRW prior NI
+        long["earnings_growth_yoy"] = (
+            (long["standalone_ni"] - long["prior_ni"]) / valid_denom
+        ).replace([np.inf, -np.inf], np.nan).clip(-3.0, 3.0)
+
+        result = (
+            long[long["available_date"].notna()][["stock_code", "available_date", "earnings_growth_yoy"]]
+            .copy()
+            .sort_values(["stock_code", "available_date"])
+        )
+        return result
+
+    def _merge_quarterly_earnings(self, df: pd.DataFrame, qe_df: pd.DataFrame) -> pd.DataFrame:
+        """merge_asof quarterly earnings growth into the panel (PIT-safe)."""
+        if qe_df.empty:
+            df["earnings_growth_yoy"] = np.nan
+            return df
+
+        df["date_dt"] = pd.to_datetime(df["date"], format="%Y%m%d", errors="coerce")
+        right = qe_df.copy()
+        right["available_dt"] = pd.to_datetime(right["available_date"], format="%Y%m%d", errors="coerce")
+        right = right.dropna(subset=["available_dt"]).sort_values(["stock_code", "available_dt"])
+
+        df = df.sort_values(["date_dt", "stock_code"])
+        merged = pd.merge_asof(
+            df,
+            right.sort_values(["available_dt", "stock_code"]),
+            left_on="date_dt",
+            right_on="available_dt",
+            by="stock_code",
+            direction="backward",
+        )
+
+        # Staleness guard: discard if the quarterly filing is >5 months old
+        staleness = (merged["date_dt"] - merged["available_dt"]).dt.days
+        merged.loc[staleness > 150, "earnings_growth_yoy"] = np.nan
+
+        merged = merged.drop(columns=["date_dt", "available_dt", "available_date"], errors="ignore")
+        merged["earnings_growth_yoy"] = pd.to_numeric(merged["earnings_growth_yoy"], errors="coerce")
+        return merged
+
+    # ------------------------------------------------------------------
     # Universe filters
     # ------------------------------------------------------------------
 
@@ -751,6 +844,26 @@ class FeatureEngineer:
             out[residual_rank_col] = out[rank_col]
         return out
 
+    def _add_composite_target(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Composite multi-horizon residual rank: 0.4*rank_21d + 0.4*rank_42d + 0.2*rank_63d."""
+        weights = {21: 0.4, 42: 0.4, 63: 0.2}
+        composite = pd.Series(0.0, index=df.index)
+        for h, w in weights.items():
+            fwd_col = f"forward_return_{h}d"
+            market_fwd_col = f"market_forward_return_{h}d"
+            if fwd_col not in df.columns or market_fwd_col not in df.columns or "rolling_beta_60d" not in df.columns:
+                residual_rank_col = f"target_residual_rank_{h}d"
+                if residual_rank_col in df.columns:
+                    composite += w * df[residual_rank_col]
+                continue
+            _tmp = f"_comp_residual_{h}"
+            df[_tmp] = df[fwd_col] - (df["rolling_beta_60d"] * df[market_fwd_col])
+            rank = df.groupby("date")[_tmp].rank(method="average", pct=True).fillna(0.5)
+            df = df.drop(columns=[_tmp])
+            composite += w * rank
+        df["target_composite_residual_rank"] = composite
+        return df
+
     # ------------------------------------------------------------------
     # Year-chunk batching
     # ------------------------------------------------------------------
@@ -805,16 +918,17 @@ class FeatureEngineer:
         data = self._exclude_delisted(raw)
 
         # --- External data merges ---
-        members = self._load_index_membership(start_date, end_date)
         sector_pit = self._load_sector_membership(start_date, end_date)
         regime = self._load_market_regime(start_date, end_date, target_horizon)
         macro_regime = self._load_macro_indices(start_date, end_date)
 
-        data = self._merge_index_membership(data, members)
         data = self._merge_sector_pit(data, sector_pit)
 
         fin_pit = self._load_financial_ratios_pit(data["stock_code"].unique().tolist(), end_date)
         data = self._merge_financial_features(data, fin_pit)
+
+        qe_pit = self._load_quarterly_earnings(end_date)
+        data = self._merge_quarterly_earnings(data, qe_pit)
 
         # Sort before feature computation
         data = data.sort_values(["stock_code", "date"])
@@ -849,6 +963,19 @@ class FeatureEngineer:
             _fm = data[_fwd_col].notna() & data[_pc].gt(0) & (_fv == 0)
             data.loc[_fm, _fwd_col] = _last_px[_fm] / data.loc[_fm, _pc] - 1
 
+        # Pre-compute forward returns for composite target horizons (21d, 63d)
+        for _h in [21, 63]:
+            if _h == target_horizon:
+                continue
+            _col = f"forward_return_{_h}d"
+            data[_col] = _g[_pc].shift(-_h) / data[_pc] - 1
+            _nm2 = data[_col].isna() & data[_pc].gt(0)
+            data.loc[_nm2, _col] = _last_px[_nm2] / data.loc[_nm2, _pc] - 1
+            if "value" in data.columns:
+                _fv2 = _g["value"].shift(-_h)
+                _fm2 = data[_col].notna() & data[_pc].gt(0) & (_fv2 == 0)
+                data.loc[_fm2, _col] = _last_px[_fm2] / data.loc[_fm2, _pc] - 1
+
         # --- Universe filters (after volume/price features are computed) ---
         data = self._apply_hard_universe_filters(data, min_price=2000, liquidity_drop_pct=0.20)
 
@@ -859,7 +986,10 @@ class FeatureEngineer:
         # for any date where index data is missing (most years in the current DB).
         data["market_regime_20d"] = data["market_regime_20d"].fillna(0.0)
         data["market_ret_1d"] = data["market_ret_1d"].fillna(0.0)
-        data[f"market_forward_return_{target_horizon}d"] = data[f"market_forward_return_{target_horizon}d"].fillna(0.0)
+        for _h in sorted({21, 42, 63, target_horizon}):
+            _mfr_col = f"market_forward_return_{_h}d"
+            if _mfr_col in data.columns:
+                data[_mfr_col] = data[_mfr_col].fillna(0.0)
 
         # --- Merge macro features (deriv_index_daily) ---
         _macro_cols = [c for c in macro_regime.columns if c != "date"]
@@ -878,6 +1008,7 @@ class FeatureEngineer:
 
         # --- Targets ---
         data = self._add_targets(data, target_horizon)
+        data = self._add_composite_target(data)
         data = data.drop(columns=["membership_date"], errors="ignore")
         return data
 

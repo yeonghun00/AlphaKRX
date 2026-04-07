@@ -1,6 +1,6 @@
 # Feature Reference
 
-36 features across 12 registered groups (2 groups produce intermediate outputs only, not model features). All computed in `ml/features/` and registered via `@register`.
+34 features across 13 registered groups (2 groups produce intermediate outputs only, not model features). All computed in `ml/features/` and registered via `@register`.
 
 > **⚠️ Important:** All features must have ≥70% coverage. Low-coverage features cause row loss via `dropna()`. See [MODEL.md](MODEL.md#coverage-rule-critical) for details.
 
@@ -56,18 +56,24 @@ See [../bias/DATA.md](../bias/DATA.md) for the 45/90-day disclosure rule.
 
 > **Coverage Note:** All fundamental features require financial statement data which may not exist for all stocks. Current coverage is ~100% for ROE/GPA (imputed from sector median). When adding new financial features, verify coverage ≥70% before adding to `FEATURE_COLUMNS`.
 
+> **⚠ Attempted and reverted twice — `accrual_ratio` / `cfo_to_ni`:**
+> - **v1 (fillna=0.0):** Conflated missing/negative NI with "zero accruals" → artificial binary split → best_iter=1 in 2021 fold, Sharpe 1.08.
+> - **v2 (sector-date median fill):** Correct imputation, but the core problem persists. During COVID recovery (2020, which is the val set for the 2021 fold), cash-burning/cyclical companies outperformed massively — the opposite of what earnings quality predicts. best_iter=1 recurred, Long-Short Sharpe degraded 0.67→0.40, Sharpe 1.30→1.04. Reverted.
+> - **Root cause:** Earnings quality signal is regime-conditional. It requires regime-awareness to work in Korean markets (cyclicals and chaebol dominate COVID bounce). Not compatible with the current regime-agnostic training setup.
+
 ---
 
-## Market Context (2)
+## Market Context (1)
 
 | Feature | What it measures |
 |---------|-----------------|
 | `market_regime_120d` | KOSPI 200 current / 120-day MA - 1 |
-| `constituent_index_count` | Number of KRX indices the stock belongs to |
+
+> `constituent_index_count` — **REMOVED 2026-04-07 (lookahead bias).** See `docs/AUDIT.md` ISSUE 9 for full details.
 
 ---
 
-## Sector (6)
+## Sector (4)
 
 | Feature | What it measures |
 |---------|-----------------|
@@ -75,8 +81,8 @@ See [../bias/DATA.md](../bias/DATA.md) for the 45/90-day disclosure rule.
 | `sector_momentum_63d` | 63-day return of the stock's sector index |
 | `sector_relative_momentum_21d` | Sector 21d return minus KOSPI 21d return |
 | `sector_relative_momentum_63d` | Sector 63d return minus KOSPI 63d return |
-| `sector_breadth_21d` | % of sector constituents with positive 21d momentum |
-| `sector_constituent_share` | Relative size of sector |
+
+> `sector_breadth_21d` and `sector_constituent_share` — **REMOVED 2026-04-07 (lookahead bias, same root cause as `constituent_index_count`).** See `docs/AUDIT.md` ISSUE 9.
 
 ---
 
@@ -129,6 +135,20 @@ Note: `is_liquidity_distressed` and `is_low_price_trap` are binary intermediate 
 
 ---
 
+## Earnings Momentum (1, PIT-safe)
+
+| Feature | What it measures |
+|---------|-----------------|
+| `earnings_growth_yoy` | YoY net income growth for the most recent fiscal quarter |
+
+Derived from DART quarterly filings (Q1/H1/Q3/Annual). Korean filings are cumulative YTD — standalone quarterly NI is recovered by subtraction (e.g. Q2 standalone = H1 YTD − Q1 YTD). YoY growth = (current_Q − prior_year_Q) / |prior_year_Q|, clipped to [−3, 3].
+
+**Coverage:** Quarterly data available from 2016 for ~1,800–2,700 stocks. Early folds (2018 test) have 2 years of quarterly history. Missing → sector-date median fill (neutral, not zero). Staleness guard: data >5 months old is treated as missing.
+
+**Why this works:** Unlike earnings quality (accrual_ratio), earnings acceleration is not regime-inverted during COVID recovery — companies with accelerating earnings outperformed in both the crash and recovery phases.
+
+---
+
 ## Feature Implementation Map
 
 | Group file | Features |
@@ -138,9 +158,10 @@ Note: `is_liquidity_distressed` and `is_low_price_trap` are binary intermediate 
 | `ml/features/volume.py` | `volume_ratio_21d`, `amihud_21d` |
 | `ml/features/volatility.py` | `rolling_beta_60d` |
 | `ml/features/fundamental.py` | `roe`, `gpa`, `sector_zscore_roe`, `sector_zscore_gpa` |
-| `ml/features/market.py` | `market_regime_120d`, `constituent_index_count` |
-| `ml/features/sector.py` | sector momentum/breadth/share (6) |
+| `ml/features/market.py` | `market_regime_120d` |
+| `ml/features/sector.py` | sector momentum (4) — breadth/share removed (lookahead) |
 | `ml/features/sector_neutral.py` | sector z-scores (9) |
 | `ml/features/distress.py` | distress scores (3) |
 | `ml/features/sector_rotation.py` | rotation signal (3) |
 | `ml/features/macro_interaction.py` | `conditional_momentum`, `value_regime_boost` |
+| `ml/features/earnings_momentum.py` | `earnings_growth_yoy` |

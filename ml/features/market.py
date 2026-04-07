@@ -10,7 +10,11 @@ from .registry import FeatureGroup, register
 @register
 class MarketFeatures(FeatureGroup):
     name = "market"
-    columns = ["market_regime_120d", "constituent_index_count"]
+    # constituent_index_count removed: index_constituents DB stores current-snapshot
+    # membership back-filled to all historical dates — confirmed lookahead bias.
+    # Permutation test showed Sharpe 1.34→0.98 impact. Do not re-add without
+    # a proper historical rebalancing ETL.
+    columns = ["market_regime_120d"]
     dependencies = []  # Merged externally by pipeline
 
     def compute(self, df: pd.DataFrame) -> pd.DataFrame:

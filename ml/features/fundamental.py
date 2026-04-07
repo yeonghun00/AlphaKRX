@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from .registry import FeatureGroup, register
@@ -33,7 +34,6 @@ class FundamentalFeatures(FeatureGroup):
             use_market = (group_n < 3) | group_std.isna() | (group_std <= 1e-12)
             mu = group_mean.where(~use_market, market_mean)
             sigma = group_std.where(~use_market, market_std)
-            import numpy as np
             df[output_col] = ((value - mu) / sigma.replace(0, np.nan)).replace(
                 [np.inf, -np.inf], np.nan
             ).fillna(0.0)

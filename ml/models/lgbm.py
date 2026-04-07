@@ -7,8 +7,16 @@ from typing import Dict, List, Optional
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+from scipy.stats import spearmanr as _spearmanr
 
 from .base import BaseRanker
+
+
+def _ic_eval(y_pred: np.ndarray, dataset: lgb.Dataset) -> tuple:
+    """Custom eval metric: Spearman IC (higher = better rank prediction)."""
+    y_true = dataset.get_label()
+    corr = _spearmanr(y_pred, y_true).statistic
+    return "ic", float(corr) if not np.isnan(corr) else 0.0, True
 
 
 
@@ -17,7 +25,7 @@ class LGBMRanker(BaseRanker):
 
     BEST_PARAMS = {
         "objective": "huber",
-        "metric": "huber",
+        "metric": "huber",  # Huber for early stopping (stable) — IC logged separately via feval
         "alpha": 0.9,
         "boosting_type": "gbdt",
         # ── Tree structure ────────────────────────────────────────────────────
@@ -90,11 +98,12 @@ class LGBMRanker(BaseRanker):
             val_data = lgb.Dataset(
                 X_val, label=y_val, reference=train_data, group=val_groups,
             )
-            callbacks.append(lgb.early_stopping(self.patience))
+            callbacks.append(lgb.early_stopping(self.patience, first_metric_only=True))
             self.model = lgb.train(
                 params, train_data,
                 num_boost_round=params.get("n_estimators", 3000),
                 valid_sets=[val_data],
+                feval=_ic_eval,
                 callbacks=callbacks,
             )
         else:

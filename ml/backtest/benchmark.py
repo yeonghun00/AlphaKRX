@@ -11,7 +11,8 @@ BENCHMARK_INDEX_MAP: dict[str, Optional[str]] = {
     "kospi": "KOSPI_코스피",
     "kosdaq": "KOSDAQ_코스닥",
     "kosdaq150": "KOSDAQ_코스닥_150",
-    "universe": None,
+    "universe": None,       # equal-weight universe average
+    "universe_cap": None,   # cap-weighted universe average (market_cap from df)
 }
 
 

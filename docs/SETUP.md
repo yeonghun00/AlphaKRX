@@ -80,7 +80,6 @@ Verify data loaded correctly:
 
 ```bash
 sqlite3 data/krx_stock_data.db "SELECT MAX(date) FROM daily_prices;"
-sqlite3 data/krx_stock_data.db "SELECT MAX(date) FROM index_constituents;"
 sqlite3 data/krx_stock_data.db "SELECT COUNT(*) FROM financial_periods;"
 ```
 

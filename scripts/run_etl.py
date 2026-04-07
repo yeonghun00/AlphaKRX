@@ -2,19 +2,21 @@
 """
 Unified ETL Runner
 
-Single entry point for all 4 ETL pipelines:
+Single entry point for all 3 active ETL pipelines:
   1. Prices (daily_prices)
-  2. Index constituents (index_constituents)
-  3. Delisted stocks (delisted_stocks)
-  4. Financials (financial_periods, financial_items_*)
+  2. Delisted stocks (delisted_stocks)
+  3. Financials (financial_periods, financial_items_*)
+
+NOTE: Index constituents ETL was REMOVED (2026-04-07) — confirmed lookahead bias.
+See docs/AUDIT.md ISSUE 9 for full details.
 
 Modes:
   update   - Auto-detect stale data and fetch only what's missing
   backfill - Load historical data for a date range
 
 Usage:
-  python3 scripts/run_etl.py update [--markets kospi,kosdaq] [--workers 4] [--skip prices index delisted financial]
-  python3 scripts/run_etl.py backfill --start-date 20100101 --end-date 20251231 [--markets kospi,kosdaq] [--workers 4] [--skip prices index delisted financial]
+  python3 scripts/run_etl.py update [--markets kospi,kosdaq] [--workers 4] [--skip prices delisted financial]
+  python3 scripts/run_etl.py backfill --start-date 20100101 --end-date 20251231 [--markets kospi,kosdaq] [--workers 4] [--skip prices delisted financial]
 """
 
 import argparse
@@ -36,7 +38,6 @@ sys.path.insert(0, str(PROJECT_ROOT / "etl"))
 from config import load_config
 from etl.price_etl import CleanETLPipeline
 from etl.krx_api import KRXAPI
-from etl.index_constituents_etl import KRXIndexConstituentsDirect
 from etl.delisted_stocks_etl import (
     download_delisted_stocks,
     create_database_table,
@@ -51,7 +52,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("run_etl")
 
-PIPELINES = ["prices", "index", "delisted", "financial"]
+PIPELINES = ["prices", "delisted", "financial"]  # "index" removed (2026-04-07 lookahead bias)
 
 # Marker file for tracking processed financial ZIPs
 FINANCIAL_MARKER = PROJECT_ROOT / "data" / "raw_financial" / ".processed_files"
@@ -141,23 +142,6 @@ def print_status(db_path: str, raw_financial_dir: Path, skip: List[str]):
                 print(f"    Gap (est)  : {len(gap)} weekdays to fetch")
         except sqlite3.OperationalError:
             print("\n  Prices")
-            print("    Table not found (will be created)")
-
-    # --- Index constituents ---
-    if "index" not in skip:
-        try:
-            cursor.execute("SELECT MAX(date), COUNT(DISTINCT date) FROM index_constituents")
-            row = cursor.fetchone()
-            max_d, n_months = row if row else (None, 0)
-            print(f"\n  Index Constituents")
-            print(f"    Latest date : {max_d or 'N/A'}")
-            print(f"    Months stored: {n_months or 0}")
-            if max_d:
-                latest_dt = datetime.strptime(max_d, "%Y-%m-%d")
-                months_gap = _monthly_first_days(_next_month(latest_dt), datetime.now())
-                print(f"    Gap (est)   : {len(months_gap)} months to fetch")
-        except sqlite3.OperationalError:
-            print("\n  Index Constituents")
             print("    Table not found (will be created)")
 
     # --- Delisted stocks ---
@@ -303,24 +287,6 @@ def run_prices_backfill(db_path: str, config: dict, markets: List[str], workers:
     return {"days_processed": days_ok, "records": total_records}
 
 
-def run_index_update(config: dict, workers: int):
-    """Update index constituents from MAX(date)+1 month to now."""
-    logger.info("--- Index Constituents: update ---")
-    processor = KRXIndexConstituentsDirect()
-    processor.update(strategy="skip", max_workers=workers)
-    return {"status": "done"}
-
-
-def run_index_backfill(config: dict, workers: int, start_date: str, end_date: str):
-    """Backfill index constituents monthly for a date range."""
-    logger.info("--- Index Constituents: backfill ---")
-    start_dt = datetime.strptime(start_date, "%Y%m%d")
-    iso_start = start_dt.strftime("%Y-%m-%d")
-    processor = KRXIndexConstituentsDirect()
-    processor.backfill(start_date=iso_start, max_workers=workers)
-    return {"status": "done"}
-
-
 def run_delisted(db_path: str):
     """Download and refresh delisted stocks (idempotent full refresh)."""
     logger.info("--- Delisted Stocks: refresh ---")
@@ -410,12 +376,13 @@ def build_parser() -> argparse.ArgumentParser:
         description="Unified ETL runner for KRX stock data pipelines",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Pipelines: prices, index, delisted, financial
+Pipelines: prices, delisted, financial
+(index pipeline removed 2026-04-07 — lookahead bias, see docs/AUDIT.md ISSUE 9)
 
 Examples:
   python3 scripts/run_etl.py update
   python3 scripts/run_etl.py update --markets kospi,kosdaq --workers 4
-  python3 scripts/run_etl.py update --skip index financial
+  python3 scripts/run_etl.py update --skip financial
   python3 scripts/run_etl.py backfill --start-date 20200101 --end-date 20201231
 """,
     )
@@ -468,8 +435,6 @@ def main():
     if args.mode == "update":
         if "prices" not in skip:
             results["prices"] = run_prices_update(db_path, config, markets, args.workers)
-        if "index" not in skip:
-            results["index"] = run_index_update(config, args.workers)
         if "delisted" not in skip:
             results["delisted"] = run_delisted(db_path)
         if "financial" not in skip:
@@ -480,10 +445,6 @@ def main():
             results["prices"] = run_prices_backfill(
                 db_path, config, markets, args.workers,
                 args.start_date, args.end_date,
-            )
-        if "index" not in skip:
-            results["index"] = run_index_backfill(
-                config, args.workers, args.start_date, args.end_date,
             )
         if "delisted" not in skip:
             results["delisted"] = run_delisted(db_path)

@@ -69,16 +69,18 @@ Current decay weight at 36 months back: exp(-0.2 * 3) ≈ 0.55
 Target  decay weight at 36 months back: exp(-0.5 * 3) ≈ 0.22
 ```
 
-**D. Fix validation set construction** ← structural fix
+**D. Fix validation set construction** ⚠ TESTED AND REVERTED
 
-Replace single-period (most-recent) validation with a multi-period or gap-based approach:
+Multi-regime val (last 25% of each year) improved IC IR (0.83→1.23) but increased Beta (0.44→0.61) and Down Capture (0.22→0.45). 2022 bear year result degraded -4%→-13%. Model learned market-correlated signals from Q4 seasonal patterns. Reverted.
 
-```
-Option A: Train on [T-3, T-1] minus last 6m  |  Val = last 6m + random 6m from T-2
-Option B: Val = fixed calendar window (e.g., always Q1 of test year)
-```
+**E. IC-based early stopping** ⚠ PARTIALLY IMPLEMENTED
 
-This prevents early stopping from being calibrated on the wrong market regime.
+Root cause: early stopping watched **Huber loss** but we care about **IC (rank correlation)**. These diverge — Huber minimum ≠ IC maximum, so the model stopped at the wrong point.
+
+Attempted: remove Huber metric, use IC as sole early stopping metric via `feval`.
+Result: IC spikes at iter 1-5 (model captures strong cross-sectional signal in first tree), then crashes. IC early stopping fires at best_iter=1, producing degenerate 1-tree models. Even worse than original.
+
+**Current approach: Huber for early stopping (stable) + IC logged via feval (diagnostic).** `first_metric_only=True` ensures early stopping only watches Huber. IC is visible in the log for monitoring but doesn't drive stopping. Training objective stays Huber.
 
 ---
 
@@ -119,7 +121,7 @@ If either is true, adding more correlated features will not help.
 
 **B. Add alpha factor diversity**
 
-Categories likely absent from current 36 features:
+Categories likely absent from current 34 features:
 
 | Category | Example Features | Why It Helps |
 |---|---|---|
@@ -142,7 +144,7 @@ Single-horizon rank targets are noisy. Blending horizons smooths label noise and
 
 **D. Increase feature_fraction: 0.4 → 0.65**
 
-With 36 features, `feature_frac=0.4` means each tree sees ~14 features. If features are correlated, the model repeatedly hits the same signal. At 0.65 (~23 features/tree), coverage improves.
+With 34 features, `feature_frac=0.4` means each tree sees ~14 features. If features are correlated, the model repeatedly hits the same signal. At 0.65 (~23 features/tree), coverage improves.
 
 ---
 
@@ -154,6 +156,10 @@ With 36 features, `feature_frac=0.4` means each tree sees ~14 features. If featu
 | Add more raw data | 1M+ rows is already sufficient |
 | Tune LR / estimators before fixing capacity | LR only matters once trees are expressive enough |
 | Add correlated feature variants | Redundancy worsens, not improves, quintile spread |
+| `constituent_index_count` + `sector_breadth_21d` + `sector_constituent_share` | **Confirmed lookahead bias** — `index_constituents` DB stored current snapshot back-filled to all history. Removed 2026-04-07. See `docs/AUDIT.md` ISSUE 9 |
+| Signal-proportional weighting (`--weighting signal`) | Higher total return but worse Sharpe/Calmar/MaxDD vs equal-weight; IC=0.06 too weak to justify concentration risk |
+| Risk-adjusted weighting (`--weighting signal_vol`) | Strictly dominated: Sharpe 1.34→1.21, Calmar 1.54→1.07. Low-vol stocks overweighted → capital concentration in low-conviction names |
+| Composite multi-horizon target (0.4×21d+0.4×42d+0.2×63d) | Sharpe 1.34→1.12, quintile unchanged. Mid-quintile noise increases from horizon mismatch. Quintile problem is alpha breadth, not label noise |
 
 ---
 
@@ -165,22 +171,37 @@ Attempted: `num_leaves` 7→31, `max_depth` 3→6, `min_data_in_leaf` 1500→500
 
 **Result: Reverted.** Capacity increase inflated train IC (0.13–0.28 → 0.28–0.43) without proportional OOS improvement. Sharpe degraded 1.30→1.15, Calmar 1.50→1.15, Max DD worsened. The near-null model warnings in 2019/2021 (best_iter=15/23) are caused by **validation set regime mismatch**, not insufficient capacity — those folds performed fine OOS (+11.99%, +41.07%). No further capacity tuning recommended until Fix D is implemented.
 
-**Real fix: Fix D — validation set construction.**
+**Real fix: Fix D — validation set construction (implemented, see below).**
 
-### Phase 2 — Target Improvement
-- [ ] Replace `target_residual_rank_42d` with composite multi-horizon target
-- [ ] Validate quintile spread improves before proceeding
+### Phase 2 — Target Improvement ⚠ TESTED AND REVERTED
 
-**Expected outcome:** Quintile monotonicity restored, spread widens.
+Attempted: composite multi-horizon target `0.4*rank_21d + 0.4*rank_42d + 0.2*rank_63d`.
+
+**Result: Reverted.** Quintile monotonicity did NOT improve (still NOT MONOTONIC). Overall performance degraded: Sharpe 1.04→~0.9 (clean baseline), Total Return 310%→246%, Alpha +99%→+35%, Hit Rate 52%→~48%. Mixing 21d/63d signals into a 42d portfolio adds noise to mid-quintile discrimination rather than reducing it. Root cause of quintile breakage is **alpha diversity**, not label noise — target blending does not address this.
 
 ### Phase 3 — Feature Audit + Diversity
-- [ ] Run SHAP analysis on current 36 features, identify redundant clusters
-- [ ] Add earnings quality features (accruals, CFO/NI)
-- [ ] Add analyst revision momentum (FY1 EPS revision)
-- [ ] Add earnings surprise (SUE)
-- [ ] Re-run backtest, compare quintile spread vs baseline
+- [x] Run SHAP/gain importance audit on current 34 features (post-lookahead removal)
+  - Top 5 features = 43.2% gain (acceptable concentration)
+  - Redundancy: ROE+sector_zscore_ROE and GPA+sector_zscore_GPA are duplicate signals (26.4% combined)
+  - 13 momentum variants = 21.9% gain, fragmented
+  - Dead feature: `sector_zscore_volume_ratio_21d` = 0.0% gain
+  - Missing: earnings quality, earnings surprise, analyst revision
+- [x] Add earnings quality features (`accrual_ratio`, `cfo_to_ni`) — ⚠ TESTED TWICE, BOTH REVERTED
+  - v1: `fillna(0.0)` → artificial binary split → best_iter=1 in 2021 fold, Sharpe 1.08
+  - v2: sector-date median fill (correct imputation) → same best_iter=1 in 2021 fold, Long-Short Sharpe 0.67→0.40, Sharpe 1.30→1.04. Reverted.
+  - Root cause: earnings quality is **regime-conditional**. During COVID recovery (2020 val set), cash-burning cyclicals outperform — opposite of signal direction. Requires regime conditioning, which is incompatible with current training design. Do not attempt again without regime-aware architecture.
+- [x] Check DB for analyst revision / SUE data — **not available** (DB is DART only, no consensus estimates)
+- [x] Add YoY quarterly earnings growth (`earnings_growth_yoy`) from DART quarterly filings ✅ CONFIRMED WORKING
+  - Derived via YTD subtraction (Q2 standalone = H1 YTD − Q1 YTD, etc.)
+  - PIT-safe via available_date, staleness guard >150 days
+  - Sector-date median fill for missing periods
+  - Coverage: 2016+, ~1,800–2,700 stocks/quarter (sufficient for 200B universe)
+  - Result (vs contaminated baseline): Sharpe 1.30→1.34, Calmar 1.50→1.54, Hit Rate 56%→66%, Long-Short Sharpe 0.67→0.77, 5/5 stat tests pass
+  - Result (vs clean baseline, post lookahead removal, universe_cap benchmark): Sharpe 0.96, Calmar 0.82, Long-Short Sharpe 0.38 — positive incremental signal confirmed
+  - Key: 2021 fold +7.64%→+47.33% (captured post-COVID earnings acceleration, no regime-inversion problem)
+- [x] Re-run backtest, compare quintile spread vs baseline — **quintile remains NOT MONOTONIC** (Q1:+2.68% Q2:+3.16% Q3:+2.60% Q4:+3.21% Q5:+3.38%). Spread unchanged. Root cause is alpha breadth (independent signals), not fixable via target/model changes alone.
 
-**Expected outcome:** Quintile spread +30–50bps, long-short Sharpe from 0.67 → 1.0+.
+**Status:** No further improvements available with current DB.
 
 ---
 
@@ -188,8 +209,9 @@ Attempted: `num_leaves` 7→31, `max_depth` 3→6, `min_data_in_leaf` 1500→500
 
 | Metric | Current | Target |
 |---|---|---|
-| Worst fold best_iter | 15 (2019) | ≥200 across all folds |
-| IC ratio worst fold | 0.20 (2018) | ≥0.40 across all folds |
-| Q1→Q5 spread | ~0.9% | ≥1.5% |
+| Worst fold best_iter | 1 (2019) | ≥200 across all folds |
+| IC ratio worst fold | 0.19 (2018) | ≥0.40 across all folds |
+| Q1→Q5 spread | ~0.7% | ≥1.5% |
 | Quintile monotonicity | NOT monotonic | Monotonic |
-| Long-Short Sharpe | 0.67 | ≥1.0 |
+| Long-Short Sharpe | **0.38** (clean, universe_cap) | ≥1.0 |
+| Portfolio Sharpe | **0.96** (clean, universe_cap) | ≥1.0 |

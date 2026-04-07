@@ -35,7 +35,6 @@ AlphaKRX/
 ├── etl/                          # Data ingestion
 │   ├── krx_api.py                # KRX API client (rate-limited, parallel)
 │   ├── price_etl.py              # Prices + stock master
-│   ├── index_constituents_etl.py # Index membership snapshots
 │   ├── delisted_stocks_etl.py    # Delisted stock list
 │   ├── index_etl.py              # Market index ETL
 │   ├── adj_price_etl.py          # Adjusted price chain

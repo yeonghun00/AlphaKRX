@@ -137,7 +137,8 @@ The model has real signal (IC 0.11, monotonic quintiles, statistically significa
 | Check | Command | What to look for |
 |---|---|---|
 | Remove 2020 | Filter results.csv, exclude 2020 | Sharpe should still be >0.7 |
-| Fairer benchmark | `--benchmark universe` | Alpha should shrink significantly |
+| Equal-weight universe | `--benchmark universe` | Alpha should shrink vs KOSPI200 (removes size premium) |
+| Cap-weight universe | `--benchmark universe_cap` | Most rigorous — alpha vs cap-weighted investable universe |
 | KOSDAQ benchmark | `--benchmark kosdaq150` | Down capture should go positive |
 | Raw win/loss ratio | `portfolio_return` column in results.csv | If raw <1.2, the 1.50 is benchmark-relative illusion |
 | Exclude bio/pharma | 🔴 Planned — add `--exclude-sector` | Does alpha survive without bio? |
@@ -373,23 +374,22 @@ if month <= 10:
 
 ---
 
-### ISSUE 9 (MEDIUM) ✅ RESOLVED: Hardcoded Date in Index Constituents ETL
+### ISSUE 9 (REMOVED 2026-04-07): Index Constituents Pipeline — Confirmed Lookahead Bias
 
-**File:** `etl/index_constituents_etl.py`, ~line 380
+**What was built:** `etl/index_constituents_etl.py` — Selenium scraper that fetched monthly KRX index membership snapshots (60 indices, 2010–2026) into an `index_constituents` table. Used to derive three model features: `constituent_index_count`, `sector_breadth_21d`, `sector_constituent_share`.
 
-```python
-from_date = '20260203'   # hardcoded
-to_date   = '20260210'   # hardcoded
-```
+**Why it was removed:** The KRX website always serves the *current* membership snapshot. Every historical month stored the same current-state data — 194 months with zero constituent changes across all 60 indices. A stock's 2019 row "knew" it was still in the KOSPI 200 in 2026. Confirmed lookahead bias.
 
-**The problem:** The OTP (One-Time Password) generation for the KRX index constituents scraper has a hardcoded date range. If this date is in the past, the scraper fetches stale index membership data. The feature `constituent_index_count` (10.3% importance in the model) will be incorrect for any period not covered by a fresh scrape.
+**Quantified impact:** Permutation test on `constituent_index_count` alone: Sharpe 1.34 → 0.98 (Δ −0.36). Clean baseline after all three features removed: Sharpe 1.04, Calmar 0.91, Total Return 310%.
 
-**Verification:**
-```bash
-# Check when index_constituents was last updated
-sqlite3 data/krx_stock_data.db "SELECT MAX(date) FROM index_constituents;"
-# Should be recent (within last month for live use)
-```
+**What was deleted:**
+- `etl/index_constituents_etl.py` — ETL scraper
+- `tools/fetch_krx_indices.py`, `fetch_all_krx_indices.py`, `extract_krx_index_constituents.py` — helper scrapers
+- `index_constituents` and `index_category_mapping` tables dropped from DB
+- `_load_index_membership()` / `_merge_index_membership()` removed from `_pipeline.py`
+- Features removed: `constituent_index_count`, `sector_breadth_21d`, `sector_constituent_share`
+
+**To restore properly:** Requires real historical rebalancing events (actual join/exit dates per stock per index). The KRX OTP scraper approach cannot provide this. Possible sources: Bloomberg/Refinitiv index history, or KRX corporate-action announcements. A new ETL would store `(stock_code, index_code, join_date, exit_date)` and look up PIT.
 
 ---
 
@@ -429,7 +429,7 @@ print("rolling_beta_60d present:", "rolling_beta_60d" in df.columns)
 | Sector not truly PIT | `_pipeline.py:268` | MEDIUM | ✅ Resolved (data limit) | Marginal |
 | Unadjusted market cap filter | `_pipeline.py:139` | MEDIUM | ✅ Not a real issue | No |
 | Non-Dec fiscal year PIT bug | `financial_etl.py:112` | MEDIUM | ✅ Resolved | No |
-| Hardcoded index ETL date | `index_constituents_etl.py:380` | MEDIUM | ✅ Resolved | No |
+| Index constituents pipeline | `etl/` (deleted) | MEDIUM | ✅ Removed 2026-04-07 (lookahead) | N/A |
 | Residual target fallback | `_pipeline.py:724` | LOW | ✅ Resolved (warns) | No |
 
 ---
@@ -872,16 +872,6 @@ python3 scripts/run_backtest.py ... --benchmark kosdaq150  --output audit_bench_
 
 **What to check:** How much alpha remains when you benchmark against your own universe (equal-weight of all investable stocks)?
 
-**Data check:**
-```sql
--- Verify KOSDAQ stocks are present in index_constituents
-SELECT index_code, COUNT(DISTINCT stock_code) AS n_stocks
-FROM index_constituents
-WHERE date >= '20170101'
-GROUP BY index_code
-ORDER BY n_stocks DESC;
-```
-
 ---
 
 ### F2. Is the alpha from the model or from sector/factor exposure?
@@ -970,23 +960,6 @@ ORDER BY year;
 **Red flag:** Financial coverage drops sharply before 2015. If <200 companies have financial data pre-2015, the early backtest years are essentially price-only.
 
 ---
-
-### G4. Index constituent coverage check
-
-**Why it matters:** Features like `constituent_index_count` (index membership) depend on the `index_constituents` table being populated for every month. Gaps cause NaN features.
-
-**Data check:**
-```sql
--- Check for gaps in monthly constituent snapshots
-SELECT strftime('%Y-%m', date) AS month,
-       COUNT(DISTINCT index_code) AS n_indices,
-       COUNT(DISTINCT stock_code) AS n_stocks
-FROM index_constituents
-GROUP BY month
-ORDER BY month;
-```
-
-**Red flag:** Any month missing entirely, or months where `n_indices < 3` (should have KOSPI, KOSPI200, KOSDAQ at minimum).
 
 ---
 

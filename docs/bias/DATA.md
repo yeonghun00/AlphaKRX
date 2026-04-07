@@ -58,7 +58,7 @@ All features use only `rolling()`, `pct_change()`, `shift(+N)` (positive shift =
 idx[f"market_forward_return_{horizon}d"] = closing_index.shift(-horizon) / closing_index - 1
 
 # feature_cols only includes @register'd columns — market_forward_return is excluded
-MarketFeatures.columns = ["market_regime_120d", "constituent_index_count"]
+MarketFeatures.columns = ["market_regime_120d"]
 feature_cols = [c for c in FeatureEngineer.FEATURE_COLUMNS if c in df.columns]
 ```
 

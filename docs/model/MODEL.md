@@ -16,12 +16,13 @@ ml/features/registry.py      ← FeatureGroup base + @register + topological sor
     ├── volume.py             (2 features)
     ├── volatility.py         (1 feature)
     ├── fundamental.py        (4 features)
-    ├── market.py             (2 features)
-    ├── sector.py             (6 features)
+    ├── market.py             (1 feature)
+    ├── sector.py             (4 features)
     ├── sector_neutral.py     (9 features)
     ├── distress.py           (3 features)
     ├── sector_rotation.py    (3 features)
-    └── macro_interaction.py  (2 features)
+    ├── macro_interaction.py  (2 features)
+    └── earnings_momentum.py  (1 feature — earnings_growth_yoy)
     │
     ▼
 ml/models/                    ← multi-model support
@@ -38,7 +39,7 @@ scripts/get_picks.py          ← live stock picks
 
 ## How It Works
 
-1. `FeatureEngineer` builds a panel of 36 features per stock per trading day from the DB
+1. `FeatureEngineer` builds a panel of 34 features per stock per trading day from the DB
 2. Forward returns are computed as targets (default: 21 trading days ahead)
 3. Data is split into yearly walk-forward folds (train on N years, test on the next year)
 4. A model (LightGBM/XGBoost/CatBoost) is trained per fold to predict outperformance
@@ -56,20 +57,22 @@ Applied on every rebalance date before scoring:
 1. **Penny stock exclusion**: `closing_price >= 2000` KRW
 2. **Low liquidity exclusion**: Drop bottom 20% by 20-day average traded value
 3. **Accrual quality filter**: Exclude positive net income + negative operating CF
-4. **Market cap floor**: Default `500B KRW` (`--min-market-cap`)
+4. **Market cap floor**: Default `200B KRW` (`--min-market-cap 200000000000`)
 5. **Delisted stock exclusion**: Remove stocks after their delisting date
 
 ---
 
 ## Target Variable
 
-| Priority | Target column | What it is |
-|----------|--------------|------------|
-| 1st | `target_riskadj_rank_{H}d` | Rank of (forward return / volatility_21d) |
-| 2nd | `target_residual_rank_{H}d` | Rank of (forward return − beta × market return) |
-| 3rd | `target_rank_{H}d` | Rank of raw forward return |
+Default: `target_residual_rank_{H}d` — cross-sectional rank of (forward return − beta × market return). Falls back to `target_rank_{H}d` if residual target is unavailable.
 
-The model trains on the highest-priority target that has sufficient coverage.
+| Column | What it is |
+|--------|------------|
+| `target_residual_rank_{H}d` | Rank of (forward_return − beta × market_return), uniform [0,1] within each date. **Default.** |
+| `target_composite_residual_rank` | Blend: 0.4×rank_21d + 0.4×rank_42d + 0.2×rank_63d. Opt-in via `--composite-target`. ⚠ Tested — Sharpe 1.34→1.12, quintile not improved. Not recommended. |
+| `target_rank_{H}d` | Rank of raw forward return. Fallback only. |
+
+**Why residual rank:** Removes market beta so the model learns stock selection skill, not market timing. The rank transformation normalises the target distribution to uniform [0,1] making cross-date training more stable.
 
 ---
 
@@ -82,10 +85,30 @@ Fold 2:  Train [2011–2013]  [43-day embargo]  Test [2014]
 ```
 
 - Last year of the training window is held out for early stopping validation (no data from test set)
+- Early stopping watches **Huber loss** (stable). IC is logged per iteration via `feval` for diagnostic visibility but does not drive stopping — IC at early iterations is too noisy (spikes at iter 1-5 then crashes) to be a reliable stopping criterion
 - 43-day embargo (auto-set to `horizon + exec_lag` at runtime) removes samples that overlap with the test period
 - Each fold trains an independent model; final evaluation is out-of-sample across all folds
 
 See [../bias/DATA.md](../bias/DATA.md) for look-ahead and survivorship bias controls, and [../bias/EVAL.md](../bias/EVAL.md) for execution, sample, and liquidity bias.
+
+---
+
+## Benchmark Notes
+
+Default benchmark is `kospi200` (KOSPI 200 large-cap index). The trading universe is KOSPI+KOSDAQ 200B+ market cap, which includes KOSDAQ mid-caps not in KOSPI200.
+
+**Implication:** Alpha vs KOSPI200 includes a size/KOSDAQ premium on top of stock selection skill. Years where KOSPI200 is dominated by a few large-cap names (e.g. 2025 semiconductor boom) will show large negative alpha even when the portfolio performs well in absolute terms.
+
+**Recommended benchmark usage:**
+
+| `--benchmark` | Use case |
+|---|---|
+| `kospi200` (default) | Investor communication, widely understood |
+| `kospi` | Check KOSDAQ style tilt |
+| `universe` | Equal-weight universe average — pure stock selection vs every investable stock equally |
+| `universe_cap` | **Cap-weighted universe average** — most rigorous: weighted by market_cap from df, no DB query needed |
+
+Run `--benchmark universe_cap` for the most apples-to-apples stock selection measurement. `universe` (equal-weight) slightly over-represents smaller stocks within the 200B+ filter.
 
 ---
 

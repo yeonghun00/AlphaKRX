@@ -38,7 +38,7 @@ python3 scripts/run_backtest.py \
 | `--embargo-days` | `21` (auto) | Purged embargo gap (auto-set to horizon + exec_lag at runtime, e.g., 22 for horizon=21) |
 | `--workers` | `1` | Parallel fold workers (default 1 = sequential, preserves holdings across folds; >1 = faster but resets holdings at fold boundaries) |
 | `--exec-lag` | `1` | Execution lag (0=close, 1=T+1 close) |
-| `--benchmark` | `kospi200` | Benchmark: `kospi200`, `kosdaq`, `universe`, or `kosdaq150` |
+| `--benchmark` | `kospi200` | Benchmark: `kospi200`, `kospi`, `kosdaq`, `kosdaq150`, `universe` (equal-weight), `universe_cap` (cap-weighted, uses market_cap from df — no DB query) |
 | `--stress-mode` | off | Enable stress testing with elevated fees (buy 0.5%, sell 0.5%) |
 | `--vol-exclude-pct` | `0.10` | Stress mode: exclude top N% most volatile names |
 | `--no-cache` | off | Skip feature cache (forces recompute) |
@@ -57,6 +57,7 @@ python3 scripts/run_backtest.py \
 | `--min-daily-value` | `0` | Exclude stocks with daily trading value < N KRW (e.g. 10000000000 for 10B KRW) |
 | `--sector-neutral-score` | on | Enable sector-neutral ranking (default on) |
 | `--no-sector-neutral` | off | Disable sector-neutral ranking |
+| `--weighting` | `equal` | Portfolio weighting: `equal` (default), `signal` (∝ score_rank), `signal_vol` (∝ score_rank / volatility_21d). Tested: `equal` best Sharpe/Calmar; `signal` +60% total return but worse DD; `signal_vol` strictly dominated |
 | `--cash-out` / `--no-cash-out` | on | Enable/disable 20d regime cash-out rule |
 | `--turnover-test-hold-rank` | `120` | Hold-rank in turnover reduction test variant |
 | `--disable-turnover-test` | off | Disable turnover test variant |

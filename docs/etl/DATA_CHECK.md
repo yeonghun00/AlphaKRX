@@ -199,41 +199,7 @@ WHERE item_code_normalized = 'ifrs-full_Equity' AND amount_current IS NULL;
 
 ---
 
-## 7. Index Constituents Coverage (`index_constituents`)
-
-- [x] Monthly snapshots should exist for every month 2010-01 through recent
-- [x] KOSPI 200 member count should be ~200 each month
-- [x] Check for any months with zero rows (data gap)
-- [x] Confirm `KOSPI_코스피_200` index code exists
-
-```sql
--- Monthly coverage
-SELECT strftime('%Y-%m', date) AS month,
-       COUNT(DISTINCT index_code) AS n_indices,
-       COUNT(DISTINCT stock_code) AS n_stocks
-FROM index_constituents
-GROUP BY month ORDER BY month;
-
--- KOSPI 200 member count per month (should be ~200)
-SELECT date, COUNT(*) AS members
-FROM index_constituents
-WHERE index_code = 'KOSPI_코스피_200'
-GROUP BY date ORDER BY date DESC LIMIT 12;
-
--- Months with no data at all
--- Compare to expected: Jan 2010 through recent = ~195 months
-SELECT COUNT(DISTINCT strftime('%Y-%m', date)) AS months_present
-FROM index_constituents;
-```
-
-**Findings:** ✅ PASS
-- 195 months present (2010-01 through 2026-03) — no gaps.
-- KOSPI 200 always has exactly 200 members each month — consistent.
-- All 60 index codes have continuous coverage.
-
----
-
-## 8. Index Daily Prices — Benchmark (`index_daily_prices`)
+## 7. Index Daily Prices — Benchmark (`index_daily_prices`)
 
 - [x] KOSPI 200 has continuous history from 2010 to recent
 - [x] No gaps > 7 calendar days (long weekends/holidays are OK)
@@ -262,7 +228,7 @@ FROM index_daily_prices WHERE index_code = 'KOSPI_코스피_200';
 
 ---
 
-## 9. VKOSPI Data (`deriv_index_daily`)
+## 8. VKOSPI Data (`deriv_index_daily`)
 
 - [x] VKOSPI series exists and has continuous history
 - [x] Values are in reasonable range (VKOSPI typically 10–40, spikes to 80+ in crises)
@@ -318,7 +284,7 @@ Annual coverage breakdown:
 
 ---
 
-## 10. Forward Return Integrity — Shift Gap Check
+## 9. Forward Return Integrity — Shift Gap Check
 
 - [x] Find stocks with large date gaps (> 20 trading days) in `daily_prices`
 - [x] These gaps cause `shift(-42)` to land on the wrong date

@@ -1,12 +1,12 @@
 # ETL Pipelines
 
-Four independent ETL pipelines populate `data/krx_stock_data.db`. See [DATABASE.md](DATABASE.md) for the full database schema.
+Three active ETL pipelines populate `data/krx_stock_data.db`. See [DATABASE.md](DATABASE.md) for the full database schema.
 
 ---
 
 ## Unified Runner (`scripts/run_etl.py`)
 
-Recommended entry point. Manages all 4 pipelines, auto-detects gaps, and skips data that already exists.
+Recommended entry point. Manages all 3 pipelines, auto-detects gaps, and skips data that already exists.
 
 ### Daily update (most common)
 
@@ -16,7 +16,6 @@ python3 scripts/run_etl.py update --markets kospi,kosdaq --workers 4
 
 What each pipeline does:
 - **Prices**: fetches from `MAX(date)+1` to today, skips existing dates
-- **Index constituents**: processes months from latest stored month+1 to now
 - **Delisted stocks**: full refresh (single HTTP call, idempotent)
 - **Financials**: only processes new ZIP files not yet in `.processed_files` marker
 
@@ -29,11 +28,11 @@ python3 scripts/run_etl.py backfill --start-date 20100101 --end-date 20251231
 ### Skip specific pipelines
 
 ```bash
-# Only run prices and delisted
-python3 scripts/run_etl.py update --skip index financial
+# Only run prices
+python3 scripts/run_etl.py update --skip delisted financial
 
 # Only run financials
-python3 scripts/run_etl.py update --skip prices index delisted
+python3 scripts/run_etl.py update --skip prices delisted
 ```
 
 ### Options
@@ -41,8 +40,7 @@ python3 scripts/run_etl.py update --skip prices index delisted
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--markets` | `kospi,kosdaq` | Markets for price fetching |
-| `--workers` | `4` | Parallel workers for index scraping |
-| `--skip` | none | Pipelines to skip: `prices`, `index`, `delisted`, `financial` |
+| `--skip` | none | Pipelines to skip: `prices`, `delisted`, `financial` |
 
 Before running, prints a status table showing each pipeline's latest data and estimated gap.
 
@@ -57,30 +55,7 @@ Fetches daily OHLCV and market cap for all KOSPI/KOSDAQ stocks. Also maintains t
 
 ---
 
-## Pipeline 2: Index Constituents (`etl/index_constituents_etl.py`)
-
-**Source**: KRX index website (via Selenium + Chrome)
-**Table updated**: `index_constituents`
-
-```bash
-# Update (latest month only)
-python3 etl/index_constituents_etl.py \
-  --mode update --strategy skip --workers 4 --config config.json
-
-# Backfill (full history from 2010)
-python3 etl/index_constituents_etl.py \
-  --mode backfill --start-date 2010-01-01 --workers 4 --config config.json
-```
-
-**Notes**:
-- Requires Chrome + matching ChromeDriver installed
-- `--strategy overwrite` replaces existing rows; `skip` keeps existing dates
-- Each snapshot records which stocks belong to which KRX indices on that month
-- Used for: (1) `constituent_index_count` feature, (2) sector assignment per stock
-
----
-
-## Pipeline 3: Delisted Stocks (`etl/delisted_stocks_etl.py`)
+## Pipeline 2: Delisted Stocks (`etl/delisted_stocks_etl.py`)
 
 **Source**: KRX KIND endpoint
 **Table updated**: `delisted_stocks`
@@ -93,7 +68,7 @@ Rebuilds the entire table each run (idempotent). The model uses this to cut off 
 
 ---
 
-## Pipeline 4: Financial Statements (`etl/financial_etl.py`)
+## Pipeline 3: Financial Statements (`etl/financial_etl.py`)
 
 **Source**: Raw ZIP files in `data/raw_financial/` (manually downloaded from DART)
 **Tables updated**: `financial_periods`, `financial_items_bs_cf`, `financial_items_pl`
@@ -135,13 +110,11 @@ Financial statement data must be downloaded manually from the DART bulk download
 ```bash
 # Row counts
 sqlite3 data/krx_stock_data.db "SELECT COUNT(*) FROM daily_prices;"
-sqlite3 data/krx_stock_data.db "SELECT COUNT(*) FROM index_constituents;"
 sqlite3 data/krx_stock_data.db "SELECT COUNT(*) FROM delisted_stocks;"
 sqlite3 data/krx_stock_data.db "SELECT COUNT(*) FROM financial_periods;"
 
 # Data freshness
 sqlite3 data/krx_stock_data.db "SELECT MAX(date) FROM daily_prices;"
-sqlite3 data/krx_stock_data.db "SELECT MAX(date) FROM index_constituents;"
 ```
 
 ---
@@ -150,7 +123,6 @@ sqlite3 data/krx_stock_data.db "SELECT MAX(date) FROM index_constituents;"
 
 | Problem | Fix |
 |---------|-----|
-| Selenium/Chrome errors in constituents ETL | Install/update Chrome and matching ChromeDriver |
 | Financial ETL loads 0 rows | Check that ZIP files exist in `data/raw_financial/` |
-| Very slow backfill | Use `--workers 4` for constituents; split date ranges for prices |
+| Very slow price backfill | Split date ranges for prices |
 | `market_type` column missing | Run `price_etl.py` first — it creates the `daily_prices` table |
