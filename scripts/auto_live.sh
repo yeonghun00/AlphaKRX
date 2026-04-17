@@ -98,9 +98,9 @@ elif grep -q "인증 성공" "$LOG_FILE"; then
   echo "  [OK]     Kiwoom authenticated"
 fi
 
-SOLD=$(grep -c "주문완료.*SELL" "$LOG_FILE" 2>/dev/null || echo 0)
-BOUGHT=$(grep -c "주문완료.*BUY" "$LOG_FILE" 2>/dev/null || echo 0)
-FAILED=$(grep -c "주문실패" "$LOG_FILE" 2>/dev/null || echo 0)
+SOLD=$(grep -c "주문완료.*SELL" "$LOG_FILE" 2>/dev/null) || SOLD=0
+BOUGHT=$(grep -c "주문완료.*BUY" "$LOG_FILE" 2>/dev/null) || BOUGHT=0
+FAILED=$(grep -c "주문실패" "$LOG_FILE" 2>/dev/null) || FAILED=0
 
 if grep -q "주문완료" "$LOG_FILE"; then
   echo "  [OK]     Orders placed — sell=$SOLD  buy=$BOUGHT"
