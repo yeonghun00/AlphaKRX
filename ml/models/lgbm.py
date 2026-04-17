@@ -116,10 +116,22 @@ class LGBMRanker(BaseRanker):
         self.logger.info("Trained LGBMRanker with %s samples", len(train_df))
         return self
 
-    def predict(self, df: pd.DataFrame) -> np.ndarray:
+    def predict(self, df: pd.DataFrame, swa: bool = False) -> np.ndarray:
         if self.model is None:
             raise ValueError("Model not trained. Call train() first.")
-        return self.model.predict(df[self.feature_cols].to_numpy())
+        X = df[self.feature_cols].to_numpy()
+        if swa:
+            n = self.model.best_iteration  # 1-indexed in LightGBM 4.x
+            total = self.model.num_trees()
+            # Average three checkpoints along the gradient path.
+            # At degenerate best_iter (e.g. 23): averages [1, 23, 73] —
+            # pulls the prediction toward a slightly more trained state
+            # without relying on a single noisy stopping point.
+            iters = sorted({max(1, n - 50), n, min(total, n + 50)})
+            return np.mean(
+                [self.model.predict(X, num_iteration=i) for i in iters], axis=0
+            )
+        return self.model.predict(X)
 
     def feature_importance(self) -> pd.DataFrame:
         if self.model is None:

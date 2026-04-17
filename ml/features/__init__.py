@@ -25,6 +25,7 @@ from ml.features import (  # noqa: F401
     sector_rotation,
     macro_interaction,
     earnings_momentum,
+    earnings_quality,
 )
 
 from ml.features._pipeline import FeatureEngineer

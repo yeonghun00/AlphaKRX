@@ -129,6 +129,7 @@ def _run_fold(payload: dict) -> dict:
     params["learning_rate"] = learning_rate
     params["n_estimators"] = n_estimators
     model.patience = patience
+
     model.train(sub_train, val_df, params=params)
 
     # ── IC diagnostics: train IC vs val IC (overfitting check) ──────────────
@@ -267,13 +268,22 @@ def _run_fold(payload: dict) -> dict:
                     # Additional 50% into cash on top of Layer 1
                     cash_weight = min(cash_weight + 0.5, 1.0)
                     effective_top_n = max(int(top_n * (1.0 - cash_weight)), 5)
-        day_df["score"] = model.predict(day_df)
+        day_df["score"] = model.predict(day_df, swa=True)
         if sector_neutral_score and "sector" in day_df.columns:
             sec_mean = day_df.groupby("sector")["score"].transform("mean")
             sec_std = day_df.groupby("sector")["score"].transform("std").replace(0, np.nan)
             day_df["score_rank"] = ((day_df["score"] - sec_mean) / sec_std).replace([np.inf, -np.inf], np.nan).fillna(0.0)
         else:
             day_df["score_rank"] = day_df["score"]
+        # Two-stage re-ranking: score within KOSPI and KOSDAQ separately.
+        # Prevents cross-market contamination where a KOSPI conglomerate and a
+        # KOSDAQ growth stock are compared on the same score scale despite having
+        # structurally different return drivers. pct=True keeps both markets
+        # contributing equally to each quintile bucket.
+        if "market_type" in day_df.columns and day_df["market_type"].nunique() > 1:
+            day_df["score_rank"] = day_df.groupby("market_type")["score_rank"].rank(
+                method="first", pct=True
+            )
         day_df["rank_pos"] = day_df["score_rank"].rank(ascending=False, method="first")
         score_rank = day_df["score_rank"].rank(method="first", pct=True)
         day_df["quintile"] = np.ceil(score_rank * 5).clip(1, 5).astype(int)
