@@ -20,12 +20,11 @@ class SectorNeutralFeatures(FeatureGroup):
         "sector_zscore_volatility_21d",
         "sector_zscore_volatility_63d",
         "sector_zscore_drawdown_252d",
-        "sector_zscore_volume_ratio_21d",
     ]
     dependencies = [
         "mom_5d", "mom_21d", "mom_63d", "mom_126d",
         "turnover_21d", "volatility_21d", "volatility_63d",
-        "drawdown_252d", "volume_ratio_21d",
+        "drawdown_252d",
     ]
 
     # (value_col, output_col)
@@ -38,7 +37,6 @@ class SectorNeutralFeatures(FeatureGroup):
         ("volatility_21d",  "sector_zscore_volatility_21d"),
         ("volatility_63d",  "sector_zscore_volatility_63d"),
         ("drawdown_252d",   "sector_zscore_drawdown_252d"),
-        ("volume_ratio_21d","sector_zscore_volume_ratio_21d"),
     ]
 
     def compute(self, df: pd.DataFrame, min_group_size: int = 3) -> pd.DataFrame:
