@@ -30,7 +30,7 @@ WHERE REPLACE(fp.available_date, '-', '') <= ?  # only disclosures before featur
 merge_asof(direction="backward")  # attach only the most recent past disclosure
 ```
 
-Korean companies must disclose within ~90 days of fiscal year-end. Even if `fiscal_end = 2024-12-31`, if `available_date = 2025-03-31`, this statement is excluded from any feature date before 2025-03-31. A 450-day staleness guard discards financial data older than 15 months.
+Korean companies must disclose within ~90 days of fiscal year-end. Even if `fiscal_end = 2024-12-31`, if `available_date = 2025-03-31`, this statement is excluded from any feature date before 2025-03-31. A 180-day staleness guard discards financial data older than ~6 months — covers the slowest annual filers with buffer, without letting truly stale data persist.
 
 ---
 

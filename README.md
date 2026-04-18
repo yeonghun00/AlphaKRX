@@ -6,41 +6,43 @@
 
 ## Backtest Results (2018–2026, 9 years out-of-sample)
 
+> Results include **0.3% slippage per side** (buy=0.35%, sell=0.55%) reflecting realistic SMID-cap bid-ask spread. Total transaction cost: 27.12% over 9 years (~3.0%/year).
+
 | | Strategy | Benchmark (universe_cap) |
 |--|--|--|
-| **Total Return** | **+407.52%** | +283.34% |
-| **Ann. Return** | **+19.78%** | — |
-| **Sharpe Ratio** | **1.13** | — |
-| **Calmar Ratio** | **0.90** | — |
-| **Max Drawdown** | -21.87% | — |
-| **Alpha** | **+124.18%** | — |
-| **Beta** | 0.42 | 1.0 |
-| **Up / Down Capture** | 0.76 / 0.22 | 1.0 / 1.0 |
-| **Hit Rate** | 58.00% (29/50 periods) | — |
+| **Total Return** | **+385.13%** | +282.97% |
+| **Ann. Return** | **+19.18%** | — |
+| **Sharpe Ratio** | **1.04** | — |
+| **Calmar Ratio** | **0.67** | — |
+| **Max Drawdown** | -28.60% | — |
+| **Alpha** | **+102.16%** | — |
+| **Beta** | 0.47 | 1.0 |
+| **Up / Down Capture** | 0.77 / 0.26 | 1.0 / 1.0 |
+| **Hit Rate** | 60.00% (30/50 periods) | — |
 
-![Backtest Report](runs/phase2_no_invvol/report.png)
+![Backtest Report](runs/run/report.png)
 
-*Statistical significance: OLS t-stat 3.39 (p=0.001\*\*\*), Newey-West HAC t-stat 2.91 (p=0.005\*\*\*), Sharpe t-stat 3.39 (p=0.001\*\*\*), IC t-stat 6.09 (p=0.000\*\*\*), Bootstrap Sharpe 95% CI [0.53, 1.87] — 4/5 tests pass at 5%, 4/5 at 1%. IC Mean +0.0626, IC IR +0.86.*
+*Statistical significance: OLS t-stat 3.15 (p=0.003\*\*\*), Newey-West HAC t-stat 2.73 (p=0.009\*\*\*), Sharpe t-stat 3.15 (p=0.003\*\*\*), IC t-stat 5.80 (p=0.000\*\*\*), Bootstrap Sharpe 95% CI [0.46, 1.76] — 4/5 tests pass at 5%, 4/5 at 1%. IC Mean +0.0586, IC IR +0.82.*
 
-**Benchmark note:** `universe_cap` is a cap-weighted portfolio of all investable stocks in the model's universe (market cap ≥ 200B KRW, KOSPI+KOSDAQ). Alpha of +124.18% is pure stock-selection skill — size and KOSDAQ premia are already in the benchmark. 2025 alpha is −66.84% because the cap-weighted benchmark was dominated by a concentrated AI/semiconductor rally; portfolio still returned +47.16% in absolute terms.
+**Benchmark note:** `universe_cap` is a cap-weighted portfolio of all investable stocks in the model's universe (market cap ≥ 200B KRW, KOSPI+KOSDAQ). Alpha of +102.16% is pure stock-selection skill — size and KOSDAQ premia are already in the benchmark. 2025 alpha is −70.29% because the cap-weighted benchmark was dominated by a concentrated AI/semiconductor rally (Samsung, SK Hynix); portfolio still returned +43.87% in absolute terms.
 
-**Config:** `--start 20100101 --min-market-cap 200000000000 --benchmark universe_cap --horizon 42 --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05 --sell-fee 0.25 --no-cash-out --output phase2_no_invvol --save-picks --no-cache`
+**Config:** `--start 20100101 --min-market-cap 200000000000 --benchmark universe_cap --horizon 42 --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05 --sell-fee 0.25 --slippage-pct 0.3 --no-cash-out --output run --save-picks --no-cache`
 
 ### Annual Breakdown
 
 | Year | Return | Alpha | Sharpe |
 |------|--------|-------|--------|
-| 2018 | -11.90% | +5.07% | -1.26 |
-| 2019 | +24.48% | +6.88% | 1.30 |
-| 2020 | +54.09% | +7.49% | 2.28 |
-| 2021 | +34.78% | +39.60% | 1.73 |
-| 2022 | -15.12% | +3.06% | -1.08 |
-| 2023 | +41.01% | +27.16% | 2.37 |
-| 2024 | +4.99% | +10.46% | 0.40 |
-| 2025 | +47.16% | -66.84%* | 3.02 |
-| 2026 | +20.50% | -28.82% | 3.35 |
+| 2018 | -10.79% | +6.30% | -1.01 |
+| 2019 | +32.09% | +14.19% | 1.53 |
+| 2020 | +57.21% | +10.76% | 2.14 |
+| 2021 | +27.56% | +32.29% | 1.39 |
+| 2022 | -17.97% | +0.17% | -1.13 |
+| 2023 | +36.84% | +22.99% | 2.39 |
+| 2024 | +4.59% | +9.97% | 0.28 |
+| 2025 | +43.87% | -70.29%* | 2.83 |
+| 2026 | +21.55% | -27.14% | 3.25 |
 
-*\*2025 alpha is negative because the cap-weighted universe benchmark was dominated by AI/semiconductor large caps. Portfolio returned +47.16% in absolute terms.*
+*\*2025 alpha is negative because the cap-weighted universe benchmark was dominated by AI/semiconductor large caps (Samsung, SK Hynix). Portfolio returned +43.87% in absolute terms.*
 
 *Annual figures are based on rebalancing windows (~6 per year), not strict calendar years. The last rebalancing window of each year extends ~43 trading days into the following year, so annual alpha figures are for directional intuition only — do not sum or compound them. Total return and overall alpha are computed from the full equity curve and are the authoritative figures.*
 
@@ -48,10 +50,10 @@
 
 | Test | Ann. Return / Cost | Sharpe | Status |
 |------|-------------------|--------|--------|
-| Long-Short (top 10% − bottom 10%) | 12.19% | 0.65 | OK |
-| Beta-Hedged (β=0.42) | 11.93% | 0.82 | OK |
-| Ex-2020 robustness | 16.07% | 0.98 | PASS ≥0.70 |
-| Turnover reduction (61%→48%) | -2.29% | 1.00 | OK |
+| Long-Short (top 10% − bottom 10%) | 14.70% | 0.72 | OK |
+| Beta-Hedged (β=0.47) | 10.58% | 0.70 | OK |
+| Ex-2020 robustness | 15.13% | 0.89 | PASS ≥0.70 |
+| Turnover reduction (61%→48%) | -2.73% | 0.92 | OK |
 
 ---
 
@@ -118,7 +120,7 @@ python3 scripts/run_etl.py update --markets kospi,kosdaq --workers 4
 ### 2. Run a backtest
 
 ```bash
-python3 scripts/run_backtest.py --start 20100101 --min-market-cap 200000000000 --benchmark universe_cap --horizon 42 --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05 --sell-fee 0.25 --no-cash-out --no-cache --output <run_name>
+python3 scripts/run_backtest.py --start 20100101 --min-market-cap 200000000000 --benchmark universe_cap --horizon 42 --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05 --sell-fee 0.25 --slippage-pct 0.3 --no-cash-out --no-cache --output <run_name>
 ```
 
 ### 3. Get today's picks

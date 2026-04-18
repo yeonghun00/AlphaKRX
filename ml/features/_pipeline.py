@@ -567,9 +567,10 @@ class FeatureEngineer:
             suffixes=("", "_fin"),
         )
 
-        # --- Staleness guard: if financial data is >15 months old, treat as missing ---
+        # --- Staleness guard: 180 days covers annual filers (90d deadline + buffer);
+        #     tighter than 450 but avoids dropping slow-filers mid-year ---
         staleness = (merged["date_dt"] - merged["available_dt"]).dt.days
-        is_stale = staleness > 450  # ~15 months
+        is_stale = staleness > 180  # ~6 months
         for col in ["roe", "gpa", "net_income", "operating_cf"]:
             if col in merged.columns:
                 merged.loc[is_stale, col] = np.nan

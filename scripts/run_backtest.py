@@ -89,6 +89,8 @@ def _run_fold(payload: dict) -> dict:
     if sub_train.empty:
         sub_train, val_df = train_df, None
     # Purged training: enforce embargo gap before test period.
+    # all_dates is derived from actual data rows, so it contains only trading days —
+    # indexing by embargo_days gives exactly that many trading days of gap.
     all_dates = sorted(pd.concat([train_df["date"], test_df["date"]]).unique())
     test_start = min(test_df["date"])
     if test_start in all_dates:
@@ -98,6 +100,19 @@ def _run_fold(payload: dict) -> dict:
             sub_train = sub_train[sub_train["date"] < cutoff].copy()
             if val_df is not None:
                 val_df = val_df[val_df["date"] < cutoff].copy()
+    # Stress-mode volatility filter: applied to training data only so test-set
+    # universe is never filtered using future volatility quantiles.
+    if stress_mode and 0 < vol_exclude_pct < 1 and "volatility_21d" in sub_train.columns:
+        vol_cut_train = sub_train.groupby("date")["volatility_21d"].transform(
+            lambda s: s.quantile(1.0 - vol_exclude_pct)
+        )
+        sub_train = sub_train[sub_train["volatility_21d"] <= vol_cut_train].copy()
+        if val_df is not None and "volatility_21d" in val_df.columns:
+            vol_cut_val = val_df.groupby("date")["volatility_21d"].transform(
+                lambda s: s.quantile(1.0 - vol_exclude_pct)
+            )
+            val_df = val_df[val_df["volatility_21d"] <= vol_cut_val].copy()
+
     if sub_train.empty:
         if val_df is not None and not val_df.empty:
             print(
@@ -521,8 +536,9 @@ def run(args: argparse.Namespace) -> None:
     from ml.model import walk_forward_split
     from ml.models import get_model_class
 
-    effective_buy_fee = args.buy_fee
-    effective_sell_fee = args.sell_fee
+    slippage_pct = getattr(args, "slippage_pct", 0.0)
+    effective_buy_fee = args.buy_fee + slippage_pct
+    effective_sell_fee = args.sell_fee + slippage_pct
     if getattr(args, "no_sector_neutral", False):
         args.sector_neutral_score = False
     if getattr(args, "no_cash_out", False):
@@ -586,11 +602,8 @@ def run(args: argparse.Namespace) -> None:
         if df.empty:
             print("No rows left after applying --exclude-years filter.")
             return
-    if args.stress_mode and 0 < args.vol_exclude_pct < 1 and "volatility_21d" in df.columns:
-        vol_cut = df.groupby("date")["volatility_21d"].transform(
-            lambda s: s.quantile(1.0 - args.vol_exclude_pct)
-        )
-        df = df[df["volatility_21d"] <= vol_cut].copy()
+    # Stress-mode vol filter is applied per-fold inside _run_fold (train data only)
+    # to avoid using future volatility quantiles when filtering the test universe.
     print(f"[Backtest] feature rows={len(df):,}, cols={len(df.columns)}", flush=True)
 
     feature_cols = [c for c in FeatureEngineer.FEATURE_COLUMNS if c in df.columns]
@@ -858,6 +871,24 @@ def run(args: argparse.Namespace) -> None:
     if not splits:
         print("No walk-forward splits available. Widen date range or reduce train years.")
         return
+
+    holdout_start = getattr(args, "holdout_start_year", 0)
+    if holdout_start:
+        holdout_folds = [s for s in splits if int(s[2]["test_year"]) >= holdout_start]
+        splits = [s for s in splits if int(s[2]["test_year"]) < holdout_start]
+        holdout_years = sorted(int(s[2]["test_year"]) for s in holdout_folds)
+        print(
+            f"\n{'!' * 70}\n"
+            f"  HOLDOUT ACTIVE: test years {holdout_years} are FROZEN.\n"
+            f"  Do not tune hyperparameters or features until final evaluation.\n"
+            f"  Remove --holdout-start-year only once to produce the honest number.\n"
+            f"{'!' * 70}\n",
+            flush=True,
+        )
+        if not splits:
+            print("No non-holdout splits remain. Reduce --holdout-start-year.")
+            return
+
     cpu_count = os.cpu_count() or 4
     workers = max(1, args.workers)
     split_years = [int(s[2]["test_year"]) for s in splits]
@@ -919,7 +950,8 @@ def run(args: argparse.Namespace) -> None:
     _bench_display = _bench_display_map.get(_bench_label) or _bench_index_code or _bench_label
     print(f"  Benchmark:        {_bench_display}  [{_bench_label}]")
     print(f"  Buy Rank:         <= {args.buy_rank}   Hold Rank: <= {args.hold_rank}")
-    print(f"  Fees:             buy={effective_buy_fee:.2f}%  sell={effective_sell_fee:.2f}%")
+    _slip_str = f"  slippage={slippage_pct:.2f}%/side" if slippage_pct else ""
+    print(f"  Fees:             buy={effective_buy_fee:.2f}%  sell={effective_sell_fee:.2f}%{_slip_str}")
     print(f"  Sector Neutral:   {effective_sector_neutral}")
     print(f"  Weighting:        {'signal-proportional (score_rank)' if getattr(args, 'signal_weight', False) else 'equal-weight'}")
     cash_out_flag = getattr(args, "cash_out", False)
@@ -1057,12 +1089,24 @@ def run(args: argparse.Namespace) -> None:
     if splits:
         latest_split = max(splits, key=lambda x: x[2]["test_year"])
         latest_train_df = latest_split[0]
+        latest_test_df = latest_split[1]
         train_years = sorted(latest_train_df["date"].str[:4].unique())
         val_year = train_years[-1]
         sub_train = latest_train_df[latest_train_df["date"].str[:4] != val_year]
         val_df = latest_train_df[latest_train_df["date"].str[:4] == val_year]
         if sub_train.empty:
             sub_train, val_df = latest_train_df, None
+        # Apply the same embargo as fold training so the final model.pkl
+        # doesn't see returns that overlap with the live-trading horizon.
+        _all_dates = sorted(pd.concat([latest_train_df["date"], latest_test_df["date"]]).unique())
+        _test_start = min(latest_test_df["date"])
+        if _test_start in _all_dates:
+            _idx = _all_dates.index(_test_start)
+            if _idx > args.embargo_days:
+                _cutoff = _all_dates[_idx - args.embargo_days]
+                sub_train = sub_train[sub_train["date"] < _cutoff].copy()
+                if val_df is not None:
+                    val_df = val_df[val_df["date"] < _cutoff].copy()
         FinalModelClass = get_model_class(args.model)
         latest_model = FinalModelClass(feature_cols=feature_cols, target_col=target_col, time_decay=args.time_decay)
         params = latest_model.BEST_PARAMS.copy()
@@ -1193,6 +1237,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=1, help="Parallel walk-forward workers (default 1 = sequential, preserves holdings across folds; >1 = faster but resets holdings at fold boundaries)")
     parser.add_argument("--model-jobs", type=int, default=0, help="Model threads per worker (0=auto)")
     parser.add_argument("--buy-fee", type=float, default=0.05, help="Buy fee percent per trade")
+    parser.add_argument("--slippage-pct", type=float, default=0.3, help="Slippage percent added to both buy and sell fees (e.g. 0.1 = 0.1%% per side). Typical SMID-cap range: 0.10-0.50%%. Default: 0.3%%")
     parser.add_argument("--sell-fee", type=float, default=0.25, help="Sell fee percent per trade")
     parser.add_argument("--stress-mode", action="store_true", help="Enable realism stress tests")
     parser.add_argument("--vol-exclude-pct", type=float, default=0.10, help="Exclude top N%% volatility names")
@@ -1204,6 +1249,7 @@ def main() -> None:
     parser.add_argument("--cash-out", action="store_true", default=True, help="Enable 20d regime cash-out rule")
     parser.add_argument("--no-cash-out", action="store_true", help="Disable cash-out rule")
     parser.add_argument("--exclude-years", type=str, default="", help="Comma-separated years to remove (e.g. 2023,2024)")
+    parser.add_argument("--holdout-start-year", type=int, default=0, help="Freeze test folds >= this year as blind holdout (0 = disabled). Remove flag only once for final honest evaluation.")
     parser.add_argument("--exclude-features", type=str, default="", help="Comma-separated feature columns to drop from model (e.g. rolling_beta_60d,value_regime_boost)")
     parser.add_argument("--turnover-test-hold-rank", type=int, default=120, help="Hold-rank in turnover test variant")
     parser.add_argument("--turnover-test-smoothing-alpha", type=float, default=0.70, help="EMA alpha for turnover test")

@@ -13,6 +13,7 @@ python3 scripts/run_backtest.py \
   --buy-rank 28 --hold-rank 90 \
   --train-years 3 \
   --buy-fee 0.05 --sell-fee 0.25 \
+  --slippage-pct 0.3 \
   --no-cash-out --no-cache \
   --output run --save-picks
 ```
@@ -33,6 +34,7 @@ python3 scripts/run_backtest.py \
 | `--patience` | `300` | Early stopping patience |
 | `--buy-fee` | `0.05` | Buy transaction cost (%) |
 | `--sell-fee` | `0.25` | Sell transaction cost (%) |
+| `--slippage-pct` | `0.3` | Slippage added to both buy and sell fees (% per side). Reflects SMID-cap bid-ask spread. Set to 0 to see pre-slippage numbers. |
 | `--buy-rank` | `10` | Max rank to buy new stocks |
 | `--hold-rank` | `90` | Max rank to hold existing stocks |
 | `--embargo-days` | `21` (auto) | Purged embargo gap (auto-set to horizon + exec_lag at runtime, e.g., 22 for horizon=21) |
@@ -54,6 +56,7 @@ python3 scripts/run_backtest.py \
 | `--stop-loss` | `0` | Intraperiod stop-loss threshold (0=off, e.g. 0.10 = cap at -10%) |
 | `--permute-feature` | — | Shuffle features to test robustness: `--permute-feature all` or `--permute-feature roe,gpa` |
 | `--exclude-years` | — | Exclude specific years: `--exclude-years 2020,2023` |
+| `--holdout-start-year` | `0` | Freeze test folds ≥ this year as a blind holdout (0 = disabled). Use `--holdout-start-year 2024` during all dev runs; remove only once for the final honest Sharpe. |
 | `--min-daily-value` | `0` | Exclude stocks with daily trading value < N KRW (e.g. 10000000000 for 10B KRW) |
 | `--sector-neutral-score` | on | Enable sector-neutral ranking (default on) |
 | `--no-sector-neutral` | off | Disable sector-neutral ranking |

@@ -27,16 +27,18 @@ Switching to T+1 execution produces comparable or better Sharpe. No execution bi
 
 ---
 
-### Mechanism 2: Transaction Costs (Slippage Internalized)
+### Mechanism 2: Transaction Costs + Slippage
 
 **Location**: `scripts/run_backtest.py` → return calculation
 
 ```python
 net_port_ret = (1.0 + port_ret) * (1.0 - transaction_cost) - 1.0
 transaction_cost = turnover * (buy_fee_rate + sell_fee_rate)
+# effective_buy_fee  = buy_fee  + slippage_pct  (default: 0.05 + 0.30 = 0.35%)
+# effective_sell_fee = sell_fee + slippage_pct  (default: 0.25 + 0.30 = 0.55%)
 ```
 
-Actual trading costs are deducted on **every rebalance**. Default settings (`buy=0.05%`, `sell=0.25%`) reflect realistic small-cap market order costs including tax.
+Actual trading costs are deducted on **every rebalance**. Default `--slippage-pct 0.3` adds 0.30% per side on top of commission to model SMID-cap bid-ask spread. Typical range: 0.10% (liquid names) to 0.50% (thin liquidity). Total tx cost over 9 years at default settings: **27.12%** (~3.0%/year).
 
 ---
 
@@ -56,7 +58,7 @@ ex_best = results[results["year"] != best_year]
 ```
 
 If Sharpe ≥ 0.70 after excluding the best year, the strategy does not depend on one outlier year.
-Result: Ex-2025 Sharpe = **0.77** — passes the 0.70 threshold.
+Result: Ex-2020 Sharpe = **0.89** — passes the 0.70 threshold.
 
 ---
 
@@ -76,7 +78,7 @@ If Q1–Q5 returns increase monotonically with model rank, signal consistency is
 IC  = rank correlation between model scores and actual returns (per rebalance)
 IC IR = mean(IC) / std(IC)   ← signal-to-noise ratio
 
-IC IR = 0.77 → IC is on average 0.77σ above zero = stable signal
+IC IR = 0.82 → IC is on average 0.82σ above zero = stable signal
 ```
 
 High IC with low IC IR = unstable (only works in certain market regimes). High IC with high IC IR = consistently predictive signal.
@@ -141,9 +143,14 @@ Practical limit accounting for slippage: ~5–15B KRW
 | **Hyperparameter selection** | Params chosen after seeing fold results | None — structural limit of iterative development | ⚠️ Residual |
 | **Feature selection (snooping)** | 34 surviving features selected through iterative testing | None — structural limit | ⚠️ Residual |
 | **Sector label PIT** | Industry label may lag actual reclassification date | `financial_periods.available_date` (data limit, not fixable) | ⚠️ Partial |
-| **Transaction cost model** | 0.25% sell underestimates market impact for mid-caps | Live trading will reveal true cost | ⚠️ Unverified |
-| **Down Capture inflation** | 0.20 may reflect residual bias, not just skill | Needs live validation | ⚠️ Unverified |
+| **Transaction cost model** | Bid-ask spread for SMID-caps | `--slippage-pct 0.3` default (0.30%/side); configurable | ✅ Modeled |
+| **Hyperparameter selection** | Params chosen after seeing fold results | `--holdout-start-year 2024` freezes 2024-2026 during dev | ⚠️ Residual (holdout pending) |
+| **Feature selection (snooping)** | 34 surviving features selected through iterative testing | `--holdout-start-year 2024` — holdout read only once for final Sharpe | ⚠️ Residual (holdout pending) |
+| **Down Capture inflation** | 0.26 may reflect residual bias, not just skill | Needs live validation | ⚠️ Unverified |
+| **Volatility filter pre-split** | Stress-mode vol filter used future quantiles | Moved inside fold loop — train-only quantile | ✅ FIXED 2026-04-19 |
+| **Final model embargo** | model.pkl trained without embargo gap | Embargo applied before final model training | ✅ FIXED 2026-04-19 |
+| **Financial staleness** | Stale fundamentals active for 15 months | Reduced to 180 days (covers slow annual filers) | ✅ FIXED 2026-04-19 |
 
 ---
 
-*Last updated: 2026-04-07 — see runs/run for actual backtest results*
+*Last updated: 2026-04-19 — see runs/run for actual backtest results*
