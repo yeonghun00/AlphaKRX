@@ -393,6 +393,18 @@ if month <= 10:
 
 ---
 
+### ISSUE 11 (VERIFIED SAFE, 2026-04-18): `market_type` in `daily_prices` Is Point-in-Time Correct
+
+**What was checked:** Two-stage re-ranking uses `daily_prices.market_type` to split KOSPI/KOSDAQ at inference. Concern: could this column contain the current market type back-filled to all history (same pattern as the index_constituents lookahead in ISSUE 9)?
+
+**Verification method:** Kakao (035720) transferred from KOSDAQ → KOSPI on 2017-07-10.
+- Rows with `date < 2017-07-10` show `market_type = 'kosdaq'` ✓
+- Rows with `date >= 2017-07-10` show `market_type = 'kospi'` ✓
+
+**Conclusion:** `market_type` records the historical state at each date, not the current snapshot. PIT-safe. No lookahead bias from two-stage re-ranking.
+
+---
+
 ### ISSUE 10 (LOW) ✅ RESOLVED: Target Variable Falls Back to Raw Returns if Market Data Missing
 
 **File:** `ml/features/_pipeline.py`, lines 724–729
@@ -431,6 +443,7 @@ print("rolling_beta_60d present:", "rolling_beta_60d" in df.columns)
 | Non-Dec fiscal year PIT bug | `financial_etl.py:112` | MEDIUM | ✅ Resolved | No |
 | Index constituents pipeline | `etl/` (deleted) | MEDIUM | ✅ Removed 2026-04-07 (lookahead) | N/A |
 | Residual target fallback | `_pipeline.py:724` | LOW | ✅ Resolved (warns) | No |
+| `market_type` in `daily_prices` | `daily_prices` table | LOW | ✅ Verified PIT-safe 2026-04-18 (Kakao 035720 KOSDAQ→KOSPI transition) | No |
 
 ---
 

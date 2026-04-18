@@ -136,11 +136,15 @@ if "market_type" in day_df.columns and day_df["market_type"].nunique() > 1:
 
 ## Phase 3 — Structural (Higher Complexity)
 
-### [todo] Dual-Model KOSPI/KOSDAQ Training
-**What:** If two-stage re-ranking (Phase 2) improves Long-Short Sharpe to 0.55+, the next step is training two separate LGBMRanker instances — one on KOSPI universe, one on KOSDAQ — and combining their scores at percentile scale.  
-**Why:** Re-ranking fixes the comparison problem but both models still share the same learned weights. Separate models can learn KOSPI-specific factors (macro sensitivity, book value) vs KOSDAQ-specific factors (earnings acceleration, retail momentum).  
-**Complexity:** ~150 lines, requires pipeline changes to split feature df by market_type before training.  
-**Prerequisite:** Phase 2 two-stage re-ranking confirmed working.
+### [reverted] Dual-Model KOSPI/KOSDAQ Training
+**File:** `ml/models/dual_lgbm.py` + registered in `ml/models/__init__.py`  
+**Activated via:** `--model dual_lgbm`  
+**What:** `DualMarketRanker` wraps two `LGBMRanker` instances — one trained on KOSPI rows, one on KOSDAQ rows — plus a unified fallback. Same `train/predict/save/load` interface as `BaseRanker`. Zero changes to the rest of the codebase.  
+**Why:** Re-ranking (Phase 2) fixes the comparison problem at inference. Dual training fixes the learning problem — a shared weight vector is a compromise between two structurally different markets.  
+**Fallback:** If a market type has < 5,000 rows (never happens in real folds, ~60k+ each), falls back to unified model. `kodex` and unknown types always use the unified fallback.  
+**Smoke test passed:** Zero NaNs, KOSPI+KOSDAQ models train independently, fallback covers gaps.  
+**Backtest command:** `python3 scripts/run_backtest.py --model dual_lgbm --output phase3_dual`  
+**Monitor:** vs phase2_no_invvol baseline — Sharpe, Long-Short Sharpe, per-market-type IC
 
 ---
 
@@ -157,6 +161,7 @@ if "market_type" in day_df.columns and day_df["market_type"].nunique() > 1:
 | Risk-adjusted vol weighting (--weighting signal_vol) | Strictly dominated: Sharpe 1.34→1.21 | Reverted |
 | 5-day reversal at 42-day rebalance | Signal decays in 48–72h, stale at rebalance time | Skip |
 | Inverse-vol sample weighting | Removed 2020 crash data → model lost defensive signal → beta 0.40→0.48, down capture 0.20→0.42 | Reverted |
+| Dual-model KOSPI/KOSDAQ training (`--model dual_lgbm`) | Each model trains on ~50% of data → less statistical power. Cross-market learning in unified model is beneficial, not harmful. Sharpe 1.13→0.85, 2021 collapsed +34%→+0.8%. Two-stage re-ranking already solves the comparison problem at inference. | Reverted |
 
 ---
 

@@ -28,7 +28,14 @@ Remaining bias risks that have not been fully resolved. Ordered by estimated imp
 - Compare feature importance stability across folds — features that only contribute in certain years are regime-specific, not general
 - Run a permutation test on each surviving feature (already done for `constituent_index_count`; extend to all 34)
 
-**Status:** ⚠️ Partial. SHAP/gain audit done (see IMPROVEMENT_ISSUES.md Phase 3). Permutation test only done for the confirmed lookahead feature.
+**Status:** ✅ Investigated 2026-04-18 via `scripts/permutation_importance.py` (prediction-level permutation across all walk-forward folds).
+
+**Findings:**
+- Top 3 genuine signal features: `sector_zscore_volatility_63d` (+0.0184 IC drop), `sector_zscore_volatility_21d` (+0.0091), `ma_ratio_5_60` (+0.0085). All confirmed clean — no look-ahead bias.
+- 17/34 features flagged ⚠ regime (help in <50% of folds). Attempted dropping the 7 worst (`rolling_beta_60d`, `value_regime_boost`, `market_regime_120d`, `sector_relative_momentum_*`, `momentum_quality`, `sector_dispersion`).
+- **Drop experiment result:** IC improved (0.0566→0.0669) but portfolio risk metrics worsened sharply — Sharpe 1.15→1.10, Calmar 1.15→0.81, Max DD -18%→-24%, Beta 0.45→0.52.
+- **Conclusion:** Features that look "useless" to IC permutation are risk features, not return features. `rolling_beta_60d` and `market_regime_120d` suppress high-beta picks in downturns — they show up in down capture and Calmar, not IC. No features to drop. The B2 concern is not confirmed as actionable — surviving features earn their place through different mechanisms (signal vs risk control).
+- Full results saved: `runs/permutation_importance.csv`
 
 ---
 
@@ -87,4 +94,4 @@ Documented in DATA.md Fix B. Affects <0.1% of training rows. Accepted.
 
 ---
 
-*Last updated: 2026-04-07*
+*Last updated: 2026-04-18*

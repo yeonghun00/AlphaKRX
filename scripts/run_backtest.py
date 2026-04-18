@@ -594,6 +594,11 @@ def run(args: argparse.Namespace) -> None:
     print(f"[Backtest] feature rows={len(df):,}, cols={len(df.columns)}", flush=True)
 
     feature_cols = [c for c in FeatureEngineer.FEATURE_COLUMNS if c in df.columns]
+    _exclude = {f.strip() for f in getattr(args, "exclude_features", "").split(",") if f.strip()}
+    if _exclude:
+        removed = [f for f in feature_cols if f in _exclude]
+        feature_cols = [f for f in feature_cols if f not in _exclude]
+        print(f"[Backtest] --exclude-features: dropped {removed} ({len(feature_cols)} features remain)", flush=True)
     fwd_col = f"forward_return_{args.horizon}d"
 
     # ── Test 1: Execution Lag ─────────────────────────────────────────────
@@ -1158,7 +1163,7 @@ def main() -> None:
         "--model",
         type=str,
         default="lgbm",
-        choices=["lgbm", "xgboost", "catboost"],
+        choices=["lgbm", "xgboost", "catboost", "dual_lgbm"],
         help="Model family",
     )
     parser.add_argument("--db", type=str, default="data/krx_stock_data.db", help="SQLite DB path")
@@ -1199,6 +1204,7 @@ def main() -> None:
     parser.add_argument("--cash-out", action="store_true", default=True, help="Enable 20d regime cash-out rule")
     parser.add_argument("--no-cash-out", action="store_true", help="Disable cash-out rule")
     parser.add_argument("--exclude-years", type=str, default="", help="Comma-separated years to remove (e.g. 2023,2024)")
+    parser.add_argument("--exclude-features", type=str, default="", help="Comma-separated feature columns to drop from model (e.g. rolling_beta_60d,value_regime_boost)")
     parser.add_argument("--turnover-test-hold-rank", type=int, default=120, help="Hold-rank in turnover test variant")
     parser.add_argument("--turnover-test-smoothing-alpha", type=float, default=0.70, help="EMA alpha for turnover test")
     parser.add_argument("--disable-turnover-test", action="store_true", help="Disable turnover test variant")

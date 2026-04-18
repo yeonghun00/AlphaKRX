@@ -94,7 +94,7 @@ KRX Market Data + Financial Statements
             │
        ETL Pipelines  ──►  SQLite DB
             │
-   35 Features × 14 Groups       ← momentum, sector, volatility,
+   34 Features × 14 Groups       ← momentum, sector, volatility,
     (registry pattern)                fundamental, distress, ...
             │
    LightGBM Ranker                ← walk-forward, Huber loss,
@@ -118,14 +118,7 @@ python3 scripts/run_etl.py update --markets kospi,kosdaq --workers 4
 ### 2. Run a backtest
 
 ```bash
-python3 scripts/run_backtest.py \
-  --start 20100101 \
-  --min-market-cap 200000000000 \
-  --horizon 42 --top-n 50 \
-  --buy-rank 28 --hold-rank 90 \
-  --train-years 3 \
-  --buy-fee 0.05 --sell-fee 0.25 \
-  --no-cash-out --no-cache
+python3 scripts/run_backtest.py --start 20100101 --min-market-cap 200000000000 --benchmark universe_cap --horizon 42 --top-n 50 --buy-rank 28 --hold-rank 90 --train-years 3 --buy-fee 0.05 --sell-fee 0.25 --no-cash-out --no-cache --output <run_name>
 ```
 
 ### 3. Get today's picks
