@@ -638,13 +638,14 @@ Examples
     pred_df["rank"] = pred_df["score_rank"].rank(ascending=False, method="first").astype(int)
     new_picks = pred_df.sort_values("rank")
 
-    # Current holdings — prefer live/state.json; fall back to picks.csv on first run
-    if state.get("current_holdings") and state.get("run_name") == run_name:
-        current_holdings = set(state["current_holdings"])
+    # Current holdings — use state.json when a rebalancing has actually been executed.
+    # Never fall back to picks.csv; that generates phantom sells on a fresh/reset account.
+    if state.get("last_executed_rebal") and state.get("run_name") == run_name:
+        current_holdings = set(state.get("current_holdings", []))
         print(f"  [State] {len(current_holdings)} holdings loaded from live/state.json")
     else:
-        current_holdings = get_current_holdings(run_dir)
-        print(f"  [State] {len(current_holdings)} holdings loaded from picks.csv (first run)")
+        current_holdings = set()
+        print(f"  [State] No prior execution recorded — starting fresh (0 holdings, buy-only)")
 
     # Build orders — pass full pred_df (before value filter) for halt detection
     sell_orders, buy_orders, stuck_holdings = build_orders(
@@ -685,17 +686,49 @@ Examples
         print("  Authentication failed. Aborting.")
         return
 
+    # Fill sell quantities from broker's actual positions
+    broker_df = client.get_holdings()
+    if not broker_df.empty:
+        qty_map: dict[str, int] = {}
+        for code_col in ("stock_code", "pdno", "code"):
+            for qty_col in ("quantity", "hldg_qty", "qty"):
+                if code_col in broker_df.columns and qty_col in broker_df.columns:
+                    qty_map = {
+                        str(c): int(q)
+                        for c, q in zip(broker_df[code_col], broker_df[qty_col])
+                    }
+                    break
+            if qty_map:
+                break
+        for o in sell_orders:
+            o["quantity"] = qty_map.get(o["stock_code"], 0)
+            if o["quantity"] == 0:
+                print(f"  [WARN] {o['stock_code']} not found in broker holdings — sell qty=0, skipping.")
+    else:
+        print("  [WARN] Could not fetch broker holdings; sell quantities remain 0. Aborting sells.")
+
     # Sell first to free up capital
+    sell_ok = 0
     print(f"\n  Sell orders ({len(sell_orders)}):")
     for o in sell_orders:
-        client.order_sell(o["stock_code"], o["quantity"], price=0)
+        if o["quantity"] > 0 and client.order_sell(o["stock_code"], o["quantity"], price=0):
+            sell_ok += 1
 
     # Then buy
+    buy_ok = 0
     print(f"\n  Buy orders ({len(buy_orders)}):")
     for o in buy_orders:
-        client.order_buy(o["stock_code"], o["quantity"], price=0)
+        if client.order_buy(o["stock_code"], o["quantity"], price=0):
+            buy_ok += 1
 
-    # Persist state — include stuck (halted) holdings so they aren't lost next cycle
+    print(f"\n  Results: {sell_ok}/{len(sell_orders)} sells, {buy_ok}/{len(buy_orders)} buys succeeded.")
+
+    # Only persist state when at least one order went through
+    if sell_ok + buy_ok == 0:
+        print("  [WARN] All orders failed — state not updated. Re-run tomorrow.")
+        save_order_log(schedule["next_exec"], sell_orders, buy_orders, [])
+        return
+
     new_holdings = list(set(new_picks.head(top_n)["stock_code"].tolist()) | stuck_holdings)
     save_order_log(schedule["next_exec"], sell_orders, buy_orders, new_holdings)
     save_state({
